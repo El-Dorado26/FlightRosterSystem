@@ -1,0 +1,10 @@
+[project]
+name = "cabin-crew-api"
+version = "0.1.0"
+description = "Flight Roster Management API"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.120.4",
+    "uvicorn>=0.38.0",
+]
