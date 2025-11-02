@@ -1,5 +1,6 @@
 
 from fastapi import FastAPI
+# Will switch to APIRouter() before integrating into the main backend
 
 app = FastAPI()
 
