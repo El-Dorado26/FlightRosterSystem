@@ -15,6 +15,7 @@ from core.database import init_database
 
 load_dotenv()
 
+#backend diagnostics
 def setup_logging():
     """Configure logging for the Flight Roster System."""
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -47,9 +48,9 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI): #Things to do before and after starting the backend
     logger.info("Starting Flight Roster System API...")
-    await run_in_threadpool(init_database)
+    await run_in_threadpool(init_database) #Connect to the database
     logger.info("Database initialized successfully!")
     logger.info("Flight Roster System API is ready to serve requests!")
     yield
@@ -61,7 +62,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
-
+#Frontend (ReactJS) to talk to with the Backend (FastAPI).
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -70,6 +71,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+#Connected each API to the main backend.
+# Once all endpoints are complete, these routers will be pluged directly into the main backend.
+#Endpoints for each API: a specific URL that performs one action in the API.
 app.include_router(flights_router, prefix="/flight-info", tags=["Flights"])
 app.include_router(flight_crew_router, prefix="/flight-crew", tags=["Flight Crew"])
 app.include_router(cabin_router, prefix="/cabin-crew", tags=["Cabin Crew"])
@@ -78,10 +82,11 @@ app.include_router(passengers_router, prefix="/passenger", tags=["Passengers"])
 @app.get("/")
 async def root():
     return {"message": "Welcome to Flight Roster System API", "version": "1.0.0"}
-
+    
+# check if the backend running
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
-
+#Starts the server 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
