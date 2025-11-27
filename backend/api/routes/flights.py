@@ -370,4 +370,94 @@ async def create_connecting_flight(
     db.add(db_conn)
     db.commit()
     db.refresh(db_conn)
+
+
+#################################################################################################################################
+from fastapi.responses import JSONResponse
+
+@router.get("/flights/{flight_id}/roster/json", response_class=JSONResponse)
+async def export_flight_roster_json(flight_id: int, db: Session = Depends(get_db)):
+    """
+    Export flight roster as JSON.
+    """
+    # Get flight info
+    flight = db.query(models.FlightInfo).filter(models.FlightInfo.id == flight_id).first()
+    if not flight:
+        raise HTTPException(status_code=404, detail="Flight not found")
+    
+    # Get crew members assigned
+    crew_members = db.query(models.FlightCrew).join(models.FlightCrewAssignment).filter(
+        models.FlightCrewAssignment.flight_id == flight_id
+    ).all()
+    
+    # Build export data
+    export_data = {
+        "flight_number": flight.flight_number,
+        "date": str(flight.date),  # or datetime formatting
+        "departure_airport": flight.departure_airport_id,
+        "arrival_airport": flight.arrival_airport_id,
+        "vehicle_type": flight.vehicle_type_id,
+        "crew": [
+            {
+                "id": c.id,
+                "name": c.name,
+                "role": c.role,
+                "seniority_level": c.seniority_level,
+                "languages": [lang.language for lang in c.languages]
+            }
+            for c in crew_members
+        ]
+    }
+
+    return JSONResponse(content=export_data)
+
+import csv
+from fastapi.responses import StreamingResponse
+from io import StringIO
+
+@router.get("/flights/{flight_id}/roster/csv")
+async def export_flight_roster_csv(flight_id: int, db: Session = Depends(get_db)):
+    """
+    Export flight roster as CSV file.
+    """
+    # Get flight info
+    flight = db.query(models.FlightInfo).filter(models.FlightInfo.id == flight_id).first()
+    if not flight:
+        raise HTTPException(status_code=404, detail="Flight not found")
+
+    # Get crew members assigned
+    crew_members = db.query(models.FlightCrew).join(models.FlightCrewAssignment).filter(
+        models.FlightCrewAssignment.flight_id == flight_id
+    ).all()
+
+    # Create CSV in memory
+    output = StringIO()
+    writer = csv.writer(output)
+    
+    # Write header
+    writer.writerow([
+        "Crew ID", "Name", "Role", "Seniority Level", "Languages"
+    ])
+    
+    # Write crew data
+    for c in crew_members:
+        writer.writerow([
+            c.id,
+            c.name,
+            c.role,
+            c.seniority_level,
+            ", ".join([lang.language for lang in c.languages])
+        ])
+    
+    output.seek(0)
+    
+    # Return as downloadable CSV
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=flight_{flight.flight_number}_roster.csv"}
+    )
+#########################################################################################################################
+
+    
     return db_conn
