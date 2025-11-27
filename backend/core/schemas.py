@@ -232,3 +232,28 @@ class PassengerUpdate(BaseModel):
 class PassengerResponse(PassengerBase):
     id: int
     created_at: Optional[datetime]
+
+
+
+# ============ Cabin Crew Schemas ============
+class CabinCrewBase(BaseModel):
+    name: str
+    role: Optional[str] = None
+    flight_id: Optional[int] = None
+
+
+class CabinCrewCreate(CabinCrewBase):
+    pass
+
+
+class CabinCrewUpdate(BaseModel): 
+    name: Optional[str] = None
+    role: Optional[str] = None
+    flight_id: Optional[int] = None
+
+
+class CabinCrewResponse(CabinCrewBase):
+    id: int
+    created_at: Optional[datetime]
+
+
