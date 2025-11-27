@@ -149,3 +149,97 @@ def delete_cabin_crew(crew_id: int):
     conn.commit()
     conn.close()
     return {"detail": "Attendant deleted"}
+
+
+
+
+##################################################################################################
+import json
+import csv
+from fastapi.responses import JSONResponse, StreamingResponse
+from io import StringIO
+
+
+
+@router.get("/export/json", response_class=JSONResponse)
+def export_cabin_crew_json():
+    conn = get_conn()
+    c = conn.cursor()
+
+    c.execute("SELECT * FROM attendants")
+    attendants = []
+
+    for att in c.fetchall():
+        att_dict = dict(att)
+
+        # languages
+        c.execute(
+            "SELECT language FROM attendant_languages WHERE attendant_id = ?",
+            (att["attendant_id"],),
+        )
+        att_dict["languages"] = [row["language"] for row in c.fetchall()]
+
+        # vehicle restrictions
+        c.execute(
+            "SELECT vehicle_type FROM attendant_vehicle_restrictions WHERE attendant_id = ?",
+            (att["attendant_id"],),
+        )
+        att_dict["vehicle_restrictions"] = [row["vehicle_type"] for row in c.fetchall()]
+
+        # recipes
+        c.execute(
+            "SELECT recipe FROM attendant_recipes WHERE attendant_id = ?",
+            (att["attendant_id"],),
+        )
+        att_dict["recipes"] = [row["recipe"] for row in c.fetchall()]
+
+        attendants.append(att_dict)
+
+    conn.close()
+    return JSONResponse(content=attendants)
+
+
+@router.get("/export/csv")
+def export_cabin_crew_csv():
+    conn = get_conn()
+    c = conn.cursor()
+
+    c.execute("SELECT * FROM attendants")
+    output = StringIO()
+    writer = None
+
+    for att in c.fetchall():
+        att_dict = dict(att)
+
+        # languages
+        c.execute(
+            "SELECT language FROM attendant_languages WHERE attendant_id = ?",
+            (att["attendant_id"],),
+        )
+        att_dict["languages"] = ",".join([row["language"] for row in c.fetchall()])
+
+        # vehicle restrictions
+        c.execute(
+            "SELECT vehicle_type FROM attendant_vehicle_restrictions WHERE attendant_id = ?",
+            (att["attendant_id"],),
+        )
+        att_dict["vehicle_restrictions"] = ",".join([row["vehicle_type"] for row in c.fetchall()])
+
+        # recipes
+        c.execute(
+            "SELECT recipe FROM attendant_recipes WHERE attendant_id = ?",
+            (att["attendant_id"],),
+        )
+        att_dict["recipes"] = ",".join([row["recipe"] for row in c.fetchall()])
+
+        # write header once
+        if writer is None:
+            writer = csv.DictWriter(output, fieldnames=att_dict.keys())
+            writer.writeheader()
+        writer.writerow(att_dict)
+
+    conn.close()
+    output.seek(0)
+    return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=cabin_crew.csv"})
+##################################################################################################
+
