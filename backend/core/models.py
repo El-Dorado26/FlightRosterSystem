@@ -187,3 +187,17 @@ class Passenger(Base):
     flight_id = Column(Integer, ForeignKey("flights.id"), nullable=True)
 
     flight = relationship("FlightInfo", back_populates="passengers")
+
+class FlightCrewAssignment(Base):
+    __tablename__ = "flight_crew_assignment"
+
+    id = Column(Integer, primary_key=True, index=True)
+    flight_id = Column(Integer, ForeignKey("flights.id"), nullable=False)
+    crew_id = Column(Integer, ForeignKey("flight_crew.id"), nullable=False)
+    role = Column(String, nullable=True)
+    assigned_at = Column(DateTime, server_default=func.now())
+
+    crew = relationship("FlightCrew", back_populates="assignments")
+    flight = relationship("FlightInfo")
+
+
