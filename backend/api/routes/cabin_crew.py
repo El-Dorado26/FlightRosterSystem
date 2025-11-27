@@ -1,12 +1,10 @@
+from fastapi import APIRouter, HTTPException
+from typing import List
 import sqlite3
-from fastapi import FastAPI, HTTPException
 
-app = FastAPI(
-    title="Cabin Crew Information API",
-    description="Provides cabin crew data (attendants, languages, vehicle restrictions, recipes)",
-    version="1.0.0"
-)
+from core.schemas import CabinCrewResponse, CabinCrewCreate, CabinCrewUpdate
 
+router = APIRouter()
 DB = "airline.db"
 
 
@@ -18,8 +16,8 @@ def get_conn():
 
 # --------------------- ENDPOINTS --------------------- #
 
-@app.get("/attendants")
-def get_all_attendants():
+@router.get("/", response_model=List[CabinCrewResponse])
+def list_cabin_crew():
     conn = get_conn()
     c = conn.cursor()
 
@@ -30,15 +28,24 @@ def get_all_attendants():
         att_dict = dict(att)
 
         # languages
-        c.execute("SELECT language FROM attendant_languages WHERE attendant_id = ?", (att["attendant_id"],))
+        c.execute(
+            "SELECT language FROM attendant_languages WHERE attendant_id = ?",
+            (att["attendant_id"],),
+        )
         att_dict["languages"] = [row["language"] for row in c.fetchall()]
 
         # vehicle restrictions
-        c.execute("SELECT vehicle_type FROM attendant_vehicle_restrictions WHERE attendant_id = ?", (att["attendant_id"],))
+        c.execute(
+            "SELECT vehicle_type FROM attendant_vehicle_restrictions WHERE attendant_id = ?",
+            (att["attendant_id"],),
+        )
         att_dict["vehicle_restrictions"] = [row["vehicle_type"] for row in c.fetchall()]
 
-        # recipes (only chefs)
-        c.execute("SELECT recipe FROM attendant_recipes WHERE attendant_id = ?", (att["attendant_id"],))
+        # recipes (only for chefs)
+        c.execute(
+            "SELECT recipe FROM attendant_recipes WHERE attendant_id = ?",
+            (att["attendant_id"],),
+        )
         att_dict["recipes"] = [row["recipe"] for row in c.fetchall()]
 
         attendants.append(att_dict)
@@ -47,8 +54,9 @@ def get_all_attendants():
     return attendants
 
 
-@app.get("/attendants/{attendant_id}")
-def get_attendant(attendant_id: int):
+@router.get("/{attendant_id}", response_model=CabinCrewResponse)
+def get_cabin_crew(attendant_id: int):
+   
     conn = get_conn()
     c = conn.cursor()
 
@@ -63,51 +71,81 @@ def get_attendant(attendant_id: int):
     att_dict = dict(att)
 
     # languages
-    c.execute("SELECT language FROM attendant_languages WHERE attendant_id = ?", (attendant_id,))
+    c.execute(
+        "SELECT language FROM attendant_languages WHERE attendant_id = ?",
+        (attendant_id,),
+    )
     att_dict["languages"] = [row["language"] for row in c.fetchall()]
 
     # vehicle restrictions
-    c.execute("SELECT vehicle_type FROM attendant_vehicle_restrictions WHERE attendant_id = ?", (attendant_id,))
+    c.execute(
+        "SELECT vehicle_type FROM attendant_vehicle_restrictions WHERE attendant_id = ?",
+        (attendant_id,),
+    )
     att_dict["vehicle_restrictions"] = [row["vehicle_type"] for row in c.fetchall()]
 
     # recipes
-    c.execute("SELECT recipe FROM attendant_recipes WHERE attendant_id = ?", (attendant_id,))
+    c.execute(
+        "SELECT recipe FROM attendant_recipes WHERE attendant_id = ?",
+        (attendant_id,),
+    )
     att_dict["recipes"] = [row["recipe"] for row in c.fetchall()]
 
     conn.close()
     return att_dict
-"""Cabin Crew routes."""
-from fastapi import APIRouter
-from typing import List
 
-from core.schemas import CabinCrewResponse, CabinCrewCreate, CabinCrewUpdate
-
-router = APIRouter()
-
-# Placeholder for mock data (will be replaced with DB queries)
-cabin_crew_db: List[dict] = []
-
-@router.get("/", response_model=List[CabinCrewResponse])
-async def list_cabin_crew():
-    """Get all cabin crew members."""
-    pass
-
-@router.get("/{crew_id}", response_model=CabinCrewResponse)
-async def get_cabin_crew(crew_id: int):
-    """Get a specific cabin crew member by ID."""
-    pass
 
 @router.post("/", response_model=CabinCrewResponse)
-async def create_cabin_crew(crew: CabinCrewCreate):
-    """Create a new cabin crew member."""
-    pass
+def create_cabin_crew(crew: CabinCrewCreate):
+    
+    conn = get_conn()
+    c = conn.cursor()
 
-@router.put("/{crew_id}", response_model=CabinCrewUpdate)
-async def update_cabin_crew(crew_id: int, crew: CabinCrewUpdate):
-    """Update a cabin crew member."""
-    pass
+    c.execute(
+        "INSERT INTO attendants (name, role) VALUES (?, ?)",
+        (crew.name, crew.role),
+    )
+    crew_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    # include keys even when values are None
+    crew_data = crew.model_dump(exclude_none=False)
+    return {**crew_data, "id": crew_id}
+
+
+@router.put("/{crew_id}", response_model=CabinCrewResponse)
+def update_cabin_crew(crew_id: int, crew: CabinCrewUpdate):
+    
+    conn = get_conn()
+    c = conn.cursor()
+
+    c.execute("SELECT * FROM attendants WHERE attendant_id = ?", (crew_id,))
+    if not c.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Attendant not found")
+
+    c.execute(
+        "UPDATE attendants SET name = ?, role = ? WHERE attendant_id = ?",
+        (crew.name, crew.role, crew_id),
+    )
+    conn.commit()
+    conn.close()
+    crew_data = crew.model_dump(exclude_none=False)
+    return {**crew_data, "id": crew_id}
+
 
 @router.delete("/{crew_id}")
-async def delete_cabin_crew(crew_id: int):
-    """Delete a cabin crew member."""
-    pass
+def delete_cabin_crew(crew_id: int):
+   
+    conn = get_conn()
+    c = conn.cursor()
+
+    c.execute("SELECT * FROM attendants WHERE attendant_id = ?", (crew_id,))
+    if not c.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Attendant not found")
+
+    c.execute("DELETE FROM attendants WHERE attendant_id = ?", (crew_id,))
+    conn.commit()
+    conn.close()
+    return {"detail": "Attendant deleted"}
