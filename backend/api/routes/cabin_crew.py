@@ -1,151 +1,169 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 from typing import List
-import sqlite3
-
 from core.schemas import CabinCrewResponse, CabinCrewCreate, CabinCrewUpdate
+from core.database import get_db
+from core import models
 
 router = APIRouter()
-DB = "airline.db"
 
-
-def get_conn():
-    conn = sqlite3.connect(DB)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-# --------------------- ENDPOINTS --------------------- #
 
 @router.get("/", response_model=List[CabinCrewResponse])
-def list_cabin_crew():
-    conn = get_conn()
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM attendants")
-    attendants = []
-
-    for att in c.fetchall():
-        att_dict = dict(att)
-
-        # languages
-        c.execute(
-            "SELECT language FROM attendant_languages WHERE attendant_id = ?",
-            (att["attendant_id"],),
-        )
-        att_dict["languages"] = [row["language"] for row in c.fetchall()]
-
-        # vehicle restrictions
-        c.execute(
-            "SELECT vehicle_type FROM attendant_vehicle_restrictions WHERE attendant_id = ?",
-            (att["attendant_id"],),
-        )
-        att_dict["vehicle_restrictions"] = [row["vehicle_type"] for row in c.fetchall()]
-
-        # recipes (only for chefs)
-        c.execute(
-            "SELECT recipe FROM attendant_recipes WHERE attendant_id = ?",
-            (att["attendant_id"],),
-        )
-        att_dict["recipes"] = [row["recipe"] for row in c.fetchall()]
-
-        attendants.append(att_dict)
-
-    conn.close()
-    return attendants
-
-
-@router.get("/{attendant_id}", response_model=CabinCrewResponse)
-def get_cabin_crew(attendant_id: int):
-   
-    conn = get_conn()
-    c = conn.cursor()
-
-    # base attendant info
-    c.execute("SELECT * FROM attendants WHERE attendant_id = ?", (attendant_id,))
-    att = c.fetchone()
-
-    if att is None:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Attendant not found")
-
-    att_dict = dict(att)
-
-    # languages
-    c.execute(
-        "SELECT language FROM attendant_languages WHERE attendant_id = ?",
-        (attendant_id,),
-    )
-    att_dict["languages"] = [row["language"] for row in c.fetchall()]
-
-    # vehicle restrictions
-    c.execute(
-        "SELECT vehicle_type FROM attendant_vehicle_restrictions WHERE attendant_id = ?",
-        (attendant_id,),
-    )
-    att_dict["vehicle_restrictions"] = [row["vehicle_type"] for row in c.fetchall()]
-
-    # recipes
-    c.execute(
-        "SELECT recipe FROM attendant_recipes WHERE attendant_id = ?",
-        (attendant_id,),
-    )
-    att_dict["recipes"] = [row["recipe"] for row in c.fetchall()]
-
-    conn.close()
-    return att_dict
-
-
-@router.post("/", response_model=CabinCrewResponse)
-def create_cabin_crew(crew: CabinCrewCreate):
+async def list_cabin_crew(db: Session = Depends(get_db)):
+    """
+    Get all cabin crew members.
     
-    conn = get_conn()
-    c = conn.cursor()
+    Returns complete information including:
+    - Attendant ID (unique system ID)
+    - Personal info (name, age, gender, nationality, languages)
+    - Attendant type (chief, regular, chef)
+    - Recipes (for chefs: 2-4 dish types)
+    - Vehicle restrictions (list of vehicle type IDs they can work on)
+    """
+    return db.query(models.CabinCrew).all()
 
-    c.execute(
-        "INSERT INTO attendants (name, role) VALUES (?, ?)",
-        (crew.name, crew.role),
-    )
-    crew_id = c.lastrowid
-    conn.commit()
-    conn.close()
-    # include keys even when values are None
-    crew_data = crew.model_dump(exclude_none=False)
-    return {**crew_data, "id": crew_id}
+
+@router.get("/{crew_id}", response_model=CabinCrewResponse)
+async def get_cabin_crew(crew_id: int, db: Session = Depends(get_db)):
+    """
+    Get a specific cabin crew member by ID.
+    
+    Provides detailed information about one attendant including their
+    type, languages, recipes (if chef), and vehicle restrictions.
+    """
+    crew = db.query(models.CabinCrew).filter(models.CabinCrew.id == crew_id).first()
+    if not crew:
+        raise HTTPException(status_code=404, detail="Cabin crew member not found")
+    return crew
+
+
+@router.post("/", response_model=CabinCrewResponse, status_code=201)
+async def create_cabin_crew(crew: CabinCrewCreate, db: Session = Depends(get_db)):
+    """
+    Create a new cabin crew member.
+    
+    Attendant types:
+    - chief: 1-4 per flight (senior attendants)
+    - regular: 4-16 per flight (junior attendants)
+    - chef: 0-2 per flight (cooks with 2-4 recipes each)
+    
+    Required fields:
+    - name, age, gender, nationality, employee_id
+    - attendant_type: must be 'chief', 'regular', or 'chef'
+    - languages: list of known languages
+    - recipes: required if attendant_type is 'chef' (2-4 dish types)
+    - vehicle_restrictions: optional list of vehicle type IDs
+    """
+    valid_types = ["chief", "regular", "chef"]
+    if crew.attendant_type not in valid_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid attendant_type. Must be one of: {', '.join(valid_types)}"
+        )
+    
+    if crew.attendant_type == "chef":
+        if not crew.recipes or len(crew.recipes) < 2 or len(crew.recipes) > 4:
+            raise HTTPException(
+                status_code=400,
+                detail="Chefs must have 2-4 dish recipes"
+            )
+    
+    existing = db.query(models.CabinCrew).filter(
+        models.CabinCrew.employee_id == crew.employee_id
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Employee ID already exists")
+    
+    db_crew = models.CabinCrew(**crew.model_dump())
+    db.add(db_crew)
+    db.commit()
+    db.refresh(db_crew)
+    return db_crew
 
 
 @router.put("/{crew_id}", response_model=CabinCrewResponse)
-def update_cabin_crew(crew_id: int, crew: CabinCrewUpdate):
+async def update_cabin_crew(crew_id: int, crew: CabinCrewUpdate, db: Session = Depends(get_db)):
+    """
+    Update a cabin crew member's information.
     
-    conn = get_conn()
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM attendants WHERE attendant_id = ?", (crew_id,))
-    if not c.fetchone():
-        conn.close()
-        raise HTTPException(status_code=404, detail="Attendant not found")
-
-    c.execute(
-        "UPDATE attendants SET name = ?, role = ? WHERE attendant_id = ?",
-        (crew.name, crew.role, crew_id),
-    )
-    conn.commit()
-    conn.close()
-    crew_data = crew.model_dump(exclude_none=False)
-    return {**crew_data, "id": crew_id}
+    Can update: name, age, gender, nationality, attendant_type,
+    languages, recipes, vehicle_restrictions, flight assignment.
+    """
+    db_crew = db.query(models.CabinCrew).filter(models.CabinCrew.id == crew_id).first()
+    if not db_crew:
+        raise HTTPException(status_code=404, detail="Cabin crew member not found")
+    
+    update_data = crew.model_dump(exclude_unset=True)
+    
+    if "attendant_type" in update_data:
+        valid_types = ["chief", "regular", "chef"]
+        if update_data["attendant_type"] not in valid_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid attendant_type. Must be one of: {', '.join(valid_types)}"
+            )
+    
+    if update_data.get("attendant_type") == "chef" or (db_crew.attendant_type == "chef" and "recipes" in update_data):
+        recipes = update_data.get("recipes", db_crew.recipes)
+        if not recipes or len(recipes) < 2 or len(recipes) > 4:
+            raise HTTPException(
+                status_code=400,
+                detail="Chefs must have 2-4 dish recipes"
+            )
+    
+    for key, value in update_data.items():
+        setattr(db_crew, key, value)
+    
+    db.commit()
+    db.refresh(db_crew)
+    return db_crew
 
 
 @router.delete("/{crew_id}")
-def delete_cabin_crew(crew_id: int):
-   
-    conn = get_conn()
-    c = conn.cursor()
+async def delete_cabin_crew(crew_id: int, db: Session = Depends(get_db)):
+    """Delete a cabin crew member."""
+    crew = db.query(models.CabinCrew).filter(models.CabinCrew.id == crew_id).first()
+    if not crew:
+        raise HTTPException(status_code=404, detail="Cabin crew member not found")
+    
+    db.delete(crew)
+    db.commit()
+    return {"detail": "Cabin crew member deleted successfully"}
 
-    c.execute("SELECT * FROM attendants WHERE attendant_id = ?", (crew_id,))
-    if not c.fetchone():
-        conn.close()
-        raise HTTPException(status_code=404, detail="Attendant not found")
 
-    c.execute("DELETE FROM attendants WHERE attendant_id = ?", (crew_id,))
-    conn.commit()
-    conn.close()
-    return {"detail": "Attendant deleted"}
+@router.get("/type/{attendant_type}", response_model=List[CabinCrewResponse])
+async def get_crew_by_type(attendant_type: str, db: Session = Depends(get_db)):
+    """
+    Get all cabin crew members of a specific type.
+    
+    Types: chief, regular, chef
+    """
+    valid_types = ["chief", "regular", "chef"]
+    if attendant_type not in valid_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid type. Must be one of: {', '.join(valid_types)}"
+        )
+    
+    return db.query(models.CabinCrew).filter(
+        models.CabinCrew.attendant_type == attendant_type
+    ).all()
+
+
+@router.get("/vehicle/{vehicle_type_id}", response_model=List[CabinCrewResponse])
+async def get_crew_by_vehicle(vehicle_type_id: int, db: Session = Depends(get_db)):
+    """
+    Get cabin crew members qualified for a specific vehicle type.
+    
+    Returns attendants who either have no vehicle restrictions or
+    have the specified vehicle type in their allowed list.
+    """
+    all_crew = db.query(models.CabinCrew).all()
+    
+    qualified_crew = [
+        crew for crew in all_crew
+        if crew.vehicle_restrictions is None or 
+           vehicle_type_id in crew.vehicle_restrictions
+    ]
+    
+    return qualified_crew

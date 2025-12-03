@@ -4,12 +4,12 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plane, Lock, Mail, User, Eye, EyeOff } from "lucide-react";
+import { authService } from "@/lib/auth";
 
 interface AuthPageProps {
-  onLogin: (email: string, password: string) => void;
+  onLogin: () => void;
 }
 
 export default function AuthPage({ onLogin }: AuthPageProps) {
@@ -30,34 +30,29 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
   const [signupError, setSignupError] = useState("");
   const [signupSuccess, setSignupSuccess] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError("");
 
-    // Mock validation
     if (!loginEmail || !loginPassword) {
       setLoginError("Please fill in all fields");
       return;
     }
 
-    // Mock login credentials (for demo purposes)
-    const mockUsers = [
-      { email: "admin@openairlines.com", password: "admin123", role: "admin" },
-      { email: "manager@openairlines.com", password: "manager123", role: "manager" },
-      { email: "crew@openairlines.com", password: "crew123", role: "crew" },
-      { email: "viewer@openairlines.com", password: "viewer123", role: "viewer" },
-    ];
+    try {
+      const response = await authService.login({
+        email: loginEmail,
+        password: loginPassword,
+      });
 
-    const user = mockUsers.find((u) => u.email === loginEmail && u.password === loginPassword);
-
-    if (user) {
-      onLogin(user.email, user.role);
-    } else {
-      setLoginError("Invalid email or password. Try: admin@openairlines.com / admin123");
+      // Call the onLogin callback to redirect
+      onLogin();
+    } catch (error: any) {
+      setLoginError(error.message || "Login failed. Please try again.");
     }
   };
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setSignupError("");
     setSignupSuccess(false);
@@ -84,13 +79,25 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
       return;
     }
 
-    // Mock successful signup
-    setSignupSuccess(true);
-    setTimeout(() => {
-      setActiveTab("login");
-      setLoginEmail(signupEmail);
-      setSignupSuccess(false);
-    }, 2000);
+    try {
+      await authService.register({
+        email: signupEmail,
+        password: signupPassword,
+        full_name: signupName,
+        role: signupRole as 'admin' | 'manager' | 'user' | 'viewer',
+      });
+
+      // After successful registration, automatically log them in
+      await authService.login({
+        email: signupEmail,
+        password: signupPassword,
+      });
+
+      // Redirect to dashboard
+      onLogin();
+    } catch (error: any) {
+      setSignupError(error.message || "Registration failed. Please try again.");
+    }
   };
 
   return (
@@ -254,16 +261,6 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
                   <Button type="submit" className="w-full" size="lg">
                     Sign In
                   </Button>
-
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
-                    <p className="text-sm font-semibold text-blue-900 mb-2">Demo Accounts (OpenAIrlines):</p>
-                    <div className="space-y-1 text-xs text-blue-800">
-                      <div><strong>Admin:</strong> admin@openairlines.com / admin123</div>
-                      <div><strong>Manager:</strong> manager@openairlines.com / manager123</div>
-                      <div><strong>Crew:</strong> crew@openairlines.com / crew123</div>
-                      <div><strong>Viewer:</strong> viewer@openairlines.com / viewer123</div>
-                    </div>
-                  </div>
                 </form>
               </TabsContent>
 

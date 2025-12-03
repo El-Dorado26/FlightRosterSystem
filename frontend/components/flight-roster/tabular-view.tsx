@@ -22,7 +22,7 @@ export function TabularView({ flight }: TabularViewProps) {
       seat: crew.seat_number,
       age: crew.age,
       nationality: crew.nationality,
-      languages: crew.languages.join(", "),
+      languages: crew.languages ? crew.languages.join(", ") : "-",
     })),
     ...flight.cabin_crew.map((crew) => ({
       type: "Cabin Crew",
@@ -33,7 +33,7 @@ export function TabularView({ flight }: TabularViewProps) {
       seat: crew.seat_number,
       age: crew.age,
       nationality: crew.nationality,
-      languages: crew.languages.join(", "),
+      languages: crew.languages ? crew.languages.join(", ") : "-",
     })),
     ...flight.passengers.map((passenger) => ({
       type: "Passenger",

@@ -1,12 +1,12 @@
 "use client";
 
-import { useAuth } from "@/lib/auth-context";
+import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import AuthPage from "@/components/auth/auth-page";
 
 export default function Home() {
-  const { isAuthenticated, login } = useAuth();
+  const { isAuthenticated } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -15,8 +15,9 @@ export default function Home() {
     }
   }, [isAuthenticated, router]);
 
-  const handleLogin = (email: string, role: string) => {
-    login(email, role);
+  const handleLogin = () => {
+    // Login is already handled by auth-page.tsx using authService
+    // Just redirect to dashboard after successful login
     router.push("/dashboard");
   };
 

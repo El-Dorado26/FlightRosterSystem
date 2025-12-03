@@ -238,22 +238,38 @@ class PassengerResponse(PassengerBase):
 # ============ Cabin Crew Schemas ============
 class CabinCrewBase(BaseModel):
     name: str
-    role: Optional[str] = None
-    flight_id: Optional[int] = None
+    age: int
+    gender: str
+    nationality: str
+    employee_id: str
+    attendant_type: str  # chief, regular, chef
+    languages: List[str]
+    recipes: Optional[List[str]] = None  # For chefs: 2-4 dish recipes
+    vehicle_restrictions: Optional[List[int]] = None  # Vehicle type IDs
 
 
 class CabinCrewCreate(CabinCrewBase):
     pass
 
 
-class CabinCrewUpdate(BaseModel): 
+class CabinCrewUpdate(BaseModel):
     name: Optional[str] = None
-    role: Optional[str] = None
+    age: Optional[int] = None
+    gender: Optional[str] = None
+    nationality: Optional[str] = None
+    attendant_type: Optional[str] = None
+    languages: Optional[List[str]] = None
+    recipes: Optional[List[str]] = None
+    vehicle_restrictions: Optional[List[int]] = None
     flight_id: Optional[int] = None
 
 
 class CabinCrewResponse(CabinCrewBase):
     id: int
+    flight_id: Optional[int] = None
     created_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
 
 

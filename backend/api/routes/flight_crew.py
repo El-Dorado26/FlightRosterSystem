@@ -17,14 +17,11 @@ from core.schemas import (
     FlightCrewAssignmentResponse,
 )
 
-
-
 router = APIRouter()
 
 
 
 # MAIN ENDPOINTS
-
 @router.get("/", response_model=List[FlightCrewResponse])
 async def list_flight_crew(
     vehicle_type: Optional[str] = None,

@@ -104,7 +104,7 @@ export function FlightSelector({ flights, selectedFlight, onFlightSelect }: Flig
                 </div>
                 <div className="flex justify-between mb-1">
                   <span className="text-muted-foreground">Distance:</span>
-                  <span className="font-medium">{selectedFlight.flight_distance_km.toLocaleString()} km</span>
+                  <span className="font-medium">{selectedFlight.flight_distance_km?.toLocaleString() || 'N/A'} km</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Airline:</span>
