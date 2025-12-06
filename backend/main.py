@@ -4,17 +4,19 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from core.redis import redis
 from api.routes.cabin_crew import router as cabin_router
 from api.routes.flight_crew import router as flight_crew_router
 from api.routes.flights import router as flights_router
 from api.routes.passengers import router as passengers_router
 from api.routes.auth import router as auth_router
 from core.database import init_database
-
-load_dotenv()
 
 #backend diagnostics
 def setup_logging():
@@ -53,6 +55,13 @@ async def lifespan(app: FastAPI): #Things to do before and after starting the ba
     logger.info("Starting Flight Roster System API...")
     await run_in_threadpool(init_database) #Connect to the database
     logger.info("Database initialized successfully!")
+
+    try:
+        redis.set("app_startup", "true")
+        logger.info("Redis connection established successfully!")
+    except Exception as e:
+        logger.warning(f"Redis connection warning: {e}")
+    
     logger.info("Flight Roster System API is ready to serve requests!")
     yield
     logger.info("Shutting down Flight Roster System API...")
@@ -84,6 +93,25 @@ app.include_router(passengers_router, prefix="/passenger", tags=["Passengers"])
 @app.get("/")
 async def root():
     return {"message": "Welcome to Flight Roster System API", "version": "1.0.0"}
+
+# Redis health check endpoint
+@app.get("/redis-health")
+async def redis_health():
+    """Check Redis connection status."""
+    try:
+        redis.set("health_check", "ok")
+        value = redis.get("health_check")
+        return {
+            "status": "healthy",
+            "redis": "connected",
+            "test_value": value
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "redis": "disconnected",
+            "error": str(e)
+        }
     
 # check if the backend running
 @app.get("/health")

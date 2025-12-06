@@ -4,7 +4,6 @@ from typing import List
 from core.schemas import CabinCrewResponse, CabinCrewCreate, CabinCrewUpdate
 from core.database import get_db
 from core import models
-import json
 import csv
 from fastapi.responses import JSONResponse, StreamingResponse
 from io import StringIO
@@ -154,92 +153,58 @@ async def get_crew_by_type(attendant_type: str, db: Session = Depends(get_db)):
     ).all()
 
 
-    c.execute("DELETE FROM attendants WHERE attendant_id = ?", (crew_id,))
-    conn.commit()
-    conn.close()
-    return {"detail": "Attendant deleted"}
 
-
-@router.get("/export/json", response_class=JSONResponse)
-def export_cabin_crew_json():
-    conn = get_conn()
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM attendants")
-    attendants = []
-
-    for att in c.fetchall():
-        att_dict = dict(att)
-
-        # languages
-        c.execute(
-            "SELECT language FROM attendant_languages WHERE attendant_id = ?",
-            (att["attendant_id"],),
-        )
-        att_dict["languages"] = [row["language"] for row in c.fetchall()]
-
-        # vehicle restrictions
-        c.execute(
-            "SELECT vehicle_type FROM attendant_vehicle_restrictions WHERE attendant_id = ?",
-            (att["attendant_id"],),
-        )
-        att_dict["vehicle_restrictions"] = [row["vehicle_type"] for row in c.fetchall()]
-
-        # recipes
-        c.execute(
-            "SELECT recipe FROM attendant_recipes WHERE attendant_id = ?",
-            (att["attendant_id"],),
-        )
-        att_dict["recipes"] = [row["recipe"] for row in c.fetchall()]
-
-        attendants.append(att_dict)
-
-    conn.close()
-    return JSONResponse(content=attendants)
+@router.get("/export/json")
+async def export_cabin_crew_json(db: Session = Depends(get_db)):
+    """Export cabin crew as downloadable JSON file."""
+    crew_members = db.query(models.CabinCrew).all()
+    
+    # Convert to dicts and remove SQLAlchemy internal fields
+    crew_list = [c.__dict__.copy() for c in crew_members]
+    for c in crew_list:
+        c.pop("_sa_instance_state", None)
+    
+    import json
+    json_content = json.dumps(crew_list, indent=2, default=str)
+    
+    return StreamingResponse(
+        iter([json_content]),
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=cabin_crew.json"}
+    )
 
 
 @router.get("/export/csv")
-def export_cabin_crew_csv():
-    conn = get_conn()
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM attendants")
+async def export_cabin_crew_csv(db: Session = Depends(get_db)):
+    """Export cabin crew as downloadable CSV file."""
+    crew_members = db.query(models.CabinCrew).all()
+    
     output = StringIO()
     writer = None
-
-    for att in c.fetchall():
-        att_dict = dict(att)
-
-        # languages
-        c.execute(
-            "SELECT language FROM attendant_languages WHERE attendant_id = ?",
-            (att["attendant_id"],),
-        )
-        att_dict["languages"] = ",".join([row["language"] for row in c.fetchall()])
-
-        # vehicle restrictions
-        c.execute(
-            "SELECT vehicle_type FROM attendant_vehicle_restrictions WHERE attendant_id = ?",
-            (att["attendant_id"],),
-        )
-        att_dict["vehicle_restrictions"] = ",".join([row["vehicle_type"] for row in c.fetchall()])
-
-        # recipes
-        c.execute(
-            "SELECT recipe FROM attendant_recipes WHERE attendant_id = ?",
-            (att["attendant_id"],),
-        )
-        att_dict["recipes"] = ",".join([row["recipe"] for row in c.fetchall()])
-
-        # write header once
+    
+    for c in crew_members:
+        row = c.__dict__.copy()
+        row.pop("_sa_instance_state", None)
+        
+        # Convert lists to comma-separated strings for CSV
+        if isinstance(row.get("languages"), list):
+            row["languages"] = ",".join(row["languages"])
+        if isinstance(row.get("recipes"), list):
+            row["recipes"] = ",".join(row["recipes"])
+        if isinstance(row.get("vehicle_restrictions"), list):
+            row["vehicle_restrictions"] = ",".join(map(str, row["vehicle_restrictions"]))
+        
         if writer is None:
-            writer = csv.DictWriter(output, fieldnames=att_dict.keys())
+            writer = csv.DictWriter(output, fieldnames=row.keys())
             writer.writeheader()
-        writer.writerow(att_dict)
-
-    conn.close()
+        writer.writerow(row)
+    
     output.seek(0)
-    return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=cabin_crew.csv"})
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=cabin_crew.csv"}
+    )
 
 @router.get("/vehicle/{vehicle_type_id}", response_model=List[CabinCrewResponse])
 async def get_crew_by_vehicle(vehicle_type_id: int, db: Session = Depends(get_db)):
@@ -258,3 +223,4 @@ async def get_crew_by_vehicle(vehicle_type_id: int, db: Session = Depends(get_db
     ]
     
     return qualified_crew
+

@@ -4,8 +4,6 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.orm import Session
 from typing import List, Optional
-
-# Import the core files
 from core.database import get_db
 from core.models import FlightCrew, PilotLanguage, VehicleType, FlightCrewAssignment
 from core.schemas import (
@@ -16,10 +14,12 @@ from core.schemas import (
     FlightCrewAssignmentCreate,
     FlightCrewAssignmentResponse,
 )
+import csv
+from io import StringIO
+from fastapi.responses import JSONResponse, StreamingResponse
+
 
 router = APIRouter()
-
-
 
 # MAIN ENDPOINTS
 @router.get("/", response_model=List[FlightCrewResponse])
@@ -35,7 +35,6 @@ async def list_flight_crew(
     Covers the points (Pilot vehicle type restriction, Pilot seniority level, and Minimum allowed flight range).
     '''
     
-    # Start with base query
     query = db.query(FlightCrew)
     
     # Apply filters if provided
@@ -484,13 +483,6 @@ async def unassign_pilot_from_flight(flight_id: int, crew_id: int, db: Session =
         "flight_id": flight_id,
         "crew_id": crew_id
     }
-
-
-###############################################################################################
-import csv
-from io import StringIO
-from fastapi.responses import JSONResponse, StreamingResponse
-
 
 
 @router.get("/export/json", response_class=JSONResponse)
