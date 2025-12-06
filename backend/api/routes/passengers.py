@@ -125,3 +125,62 @@ def delete_passenger(passenger_id: int, db: Session = Depends(get_db)):
     db.commit()
     # 204 should not return a body
     return
+
+
+#####################################################################
+import json
+import csv
+from io import StringIO
+from fastapi.responses import JSONResponse, StreamingResponse
+
+
+
+@router.get("/export/json", response_class=JSONResponse)
+def export_passengers_json(flight_id: Optional[int] = None, db: Session = Depends(get_db)):
+    """Export passengers as JSON, optionally filtered by flight."""
+    query = db.query(Passenger)
+    if flight_id:
+        query = query.filter(Passenger.flight_id == flight_id)
+    passengers = query.all()
+
+    # Convert to list of dicts
+    passenger_list = [p.__dict__.copy() for p in passengers]
+    # Remove SQLAlchemy internal key
+    for p in passenger_list:
+        p.pop("_sa_instance_state", None)
+
+    return JSONResponse(content=passenger_list)
+
+
+@router.get("/export/csv")
+def export_passengers_csv(flight_id: Optional[int] = None, db: Session = Depends(get_db)):
+    """Export passengers as CSV, optionally filtered by flight."""
+    query = db.query(Passenger)
+    if flight_id:
+        query = query.filter(Passenger.flight_id == flight_id)
+    passengers = query.all()
+
+    output = StringIO()
+    writer = None
+
+    for p in passengers:
+        row = p.__dict__.copy()
+        row.pop("_sa_instance_state", None)  # remove internal SQLAlchemy field
+
+        if writer is None:
+            writer = csv.DictWriter(output, fieldnames=row.keys())
+            writer.writeheader()
+        writer.writerow(row)
+
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=passengers.csv"}
+    )
+#####################################################################
+
+
+
+
+

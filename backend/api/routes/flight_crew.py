@@ -17,14 +17,11 @@ from core.schemas import (
     FlightCrewAssignmentResponse,
 )
 
-
-
 router = APIRouter()
 
 
 
 # MAIN ENDPOINTS
-
 @router.get("/", response_model=List[FlightCrewResponse])
 async def list_flight_crew(
     vehicle_type: Optional[str] = None,
@@ -487,3 +484,85 @@ async def unassign_pilot_from_flight(flight_id: int, crew_id: int, db: Session =
         "flight_id": flight_id,
         "crew_id": crew_id
     }
+
+
+###############################################################################################
+import csv
+from io import StringIO
+from fastapi.responses import JSONResponse, StreamingResponse
+
+
+
+@router.get("/export/json", response_class=JSONResponse)
+async def export_flight_crew_json(
+    vehicle_type: Optional[str] = None,
+    seniority_level: Optional[str] = None,
+    min_allowed_range: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Export flight crew as JSON with optional filters."""
+    query = db.query(FlightCrew)
+
+    if vehicle_type:
+        query = query.join(VehicleType, FlightCrew.vehicle_type_restriction_id == VehicleType.id)
+        query = query.filter(VehicleType.aircraft_name == vehicle_type)
+
+    if seniority_level:
+        query = query.filter(FlightCrew.seniority_level == seniority_level.lower())
+
+    if min_allowed_range is not None:
+        query = query.filter(FlightCrew.max_allowed_distance_km >= min_allowed_range)
+
+    crew_members = query.all()
+
+    # Convert to dicts and remove SQLAlchemy internal fields
+    crew_list = [c.__dict__.copy() for c in crew_members]
+    for c in crew_list:
+        c.pop("_sa_instance_state", None)
+
+    return JSONResponse(content=crew_list)
+
+
+@router.get("/export/csv")
+async def export_flight_crew_csv(
+    vehicle_type: Optional[str] = None,
+    seniority_level: Optional[str] = None,
+    min_allowed_range: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    
+    query = db.query(FlightCrew)
+
+    if vehicle_type:
+        query = query.join(VehicleType, FlightCrew.vehicle_type_restriction_id == VehicleType.id)
+        query = query.filter(VehicleType.aircraft_name == vehicle_type)
+
+    if seniority_level:
+        query = query.filter(FlightCrew.seniority_level == seniority_level.lower())
+
+    if min_allowed_range is not None:
+        query = query.filter(FlightCrew.max_allowed_distance_km >= min_allowed_range)
+
+    crew_members = query.all()
+
+    output = StringIO()
+    writer = None
+
+    for c in crew_members:
+        row = c.__dict__.copy()
+        row.pop("_sa_instance_state", None)
+
+        if writer is None:
+            writer = csv.DictWriter(output, fieldnames=row.keys())
+            writer.writeheader()
+        writer.writerow(row)
+
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=flight_crew.csv"}
+    )
+#################################################################################################
+
+

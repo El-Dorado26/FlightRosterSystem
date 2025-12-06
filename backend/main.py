@@ -11,6 +11,7 @@ from api.routes.cabin_crew import router as cabin_router
 from api.routes.flight_crew import router as flight_crew_router
 from api.routes.flights import router as flights_router
 from api.routes.passengers import router as passengers_router
+from api.routes.auth import router as auth_router
 from core.database import init_database
 
 load_dotenv()
@@ -74,6 +75,7 @@ app.add_middleware(
 #Connected each API to the main backend.
 # Once all endpoints are complete, these routers will be pluged directly into the main backend.
 #Endpoints for each API: a specific URL that performs one action in the API.
+app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 app.include_router(flights_router, prefix="/flight-info", tags=["Flights"])
 app.include_router(flight_crew_router, prefix="/flight-crew", tags=["Flight Crew"])
 app.include_router(cabin_router, prefix="/cabin-crew", tags=["Cabin Crew"])

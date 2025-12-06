@@ -2,7 +2,6 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
-# TODO
 class Passenger(BaseModel):
     id: int
     name: str

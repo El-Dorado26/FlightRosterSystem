@@ -84,7 +84,7 @@ export function ExtendedView({ flight }: ExtendedViewProps) {
                       <TableCell>{crew.age}</TableCell>
                       <TableCell>{crew.gender}</TableCell>
                       <TableCell>{crew.nationality}</TableCell>
-                      <TableCell className="text-xs">{crew.languages.join(", ")}</TableCell>
+                      <TableCell className="text-xs">{crew.languages ? crew.languages.join(", ") : "-"}</TableCell>
                       <TableCell>{crew.hours_flown.toLocaleString()}</TableCell>
                       <TableCell>{crew.max_allowed_distance_km.toLocaleString()}</TableCell>
                       <TableCell className="font-mono text-xs">{crew.seat_number}</TableCell>
@@ -142,7 +142,7 @@ export function ExtendedView({ flight }: ExtendedViewProps) {
                       <TableCell>{crew.age}</TableCell>
                       <TableCell>{crew.gender}</TableCell>
                       <TableCell>{crew.nationality}</TableCell>
-                      <TableCell className="text-xs">{crew.languages.join(", ")}</TableCell>
+                      <TableCell className="text-xs">{crew.languages ? crew.languages.join(", ") : "-"}</TableCell>
                       <TableCell className="text-xs">
                         {crew.dish_recipes ? (
                           <div className="space-y-1">

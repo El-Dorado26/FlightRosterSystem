@@ -3,11 +3,10 @@ from sqlalchemy import (
     DateTime,
     Integer,
     String,
-    Text,
     ForeignKey,
     Float,
-    Boolean,
     JSON,
+    Boolean,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -159,6 +158,7 @@ class FlightCrew(Base):
     flight = relationship("FlightInfo", back_populates="flight_crew")
     vehicle_type_restriction = relationship("VehicleType")
     languages = relationship("PilotLanguage", back_populates="pilot")
+    assignments = relationship("FlightCrewAssignment", back_populates="crew")
 
 
 class CabinCrew(Base):
@@ -166,9 +166,14 @@ class CabinCrew(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
+    age = Column(Integer, nullable=False)
+    gender = Column(String, nullable=False)
+    nationality = Column(String, nullable=False)
     employee_id = Column(String, unique=True, index=True, nullable=False)
-    role = Column(String, nullable=False)
-    certifications = Column(Text, default="")
+    attendant_type = Column(String, nullable=False)  # chief, regular, chef
+    languages = Column(JSON, nullable=False)  # List of languages
+    recipes = Column(JSON, nullable=True)  # List of dish recipes (for chefs only)
+    vehicle_restrictions = Column(JSON, nullable=True)  # List of vehicle type IDs
     created_at = Column(DateTime, server_default=func.now())
     flight_id = Column(Integer, ForeignKey("flights.id"), nullable=True)
 
@@ -199,5 +204,3 @@ class FlightCrewAssignment(Base):
 
     crew = relationship("FlightCrew", back_populates="assignments")
     flight = relationship("FlightInfo")
-
-

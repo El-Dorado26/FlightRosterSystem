@@ -9,7 +9,7 @@ interface FlightStatisticsProps {
 }
 
 export function FlightStatistics({ flight }: FlightStatisticsProps) {
-  const totalCapacity = flight.vehicle_type.total_seats;
+  const totalCapacity = flight.vehicle_type.total_seats || 0;
   const occupiedSeats = flight.passengers.filter((p) => !p.parent_id).length;
   const occupancyRate = Math.round((occupiedSeats / totalCapacity) * 100);
 
@@ -17,11 +17,11 @@ export function FlightStatistics({ flight }: FlightStatisticsProps) {
   const economySeats = flight.passengers.filter((p) => p.seat_type === "Economy" && !p.parent_id).length;
   const infantCount = flight.passengers.filter((p) => p.parent_id).length;
 
-  const businessCapacity = flight.vehicle_type.seating_plan.business;
-  const economyCapacity = flight.vehicle_type.seating_plan.economy;
+  const businessCapacity = flight.vehicle_type.seating_plan?.business || 16;
+  const economyCapacity = flight.vehicle_type.seating_plan?.economy || 150;
 
-  const businessOccupancy = Math.round((businessSeats / businessCapacity) * 100);
-  const economyOccupancy = Math.round((economySeats / economyCapacity) * 100);
+  const businessOccupancy = businessCapacity > 0 ? Math.round((businessSeats / businessCapacity) * 100) : 0;
+  const economyOccupancy = economyCapacity > 0 ? Math.round((economySeats / economyCapacity) * 100) : 0;
 
   const totalCrew = flight.flight_crew.length + flight.cabin_crew.length;
   const seniorPilots = flight.flight_crew.filter((c) => c.seniority_level === "Senior").length;
