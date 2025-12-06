@@ -1,38 +1,41 @@
 "use client";
 
-import { Flight } from "@/lib/mock-data";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Plane } from "lucide-react";
 import { useState } from "react";
 
 interface PlaneViewProps {
-  flight: Flight;
+  flight: any;
 }
 
 export function PlaneView({ flight }: PlaneViewProps) {
   const [hoveredSeat, setHoveredSeat] = useState<string | null>(null);
 
-  const seatingPlan = flight.vehicle_type.seating_plan;
-  const rows = seatingPlan.rows;
-  const seatsPerRow = seatingPlan.seats_per_row;
+  const vehicleType = flight.vehicle_type || {};
+  const seatingPlan = vehicleType.seating_plan || { rows: 30, seats_per_row: 6, business: 24, economy: 156 };
+  const rows = seatingPlan.rows || 30;
+  const seatsPerRow = seatingPlan.seats_per_row || 6;
 
-  // Create a map of seat assignments
   const seatMap = new Map<string, any>();
 
-  flight.flight_crew.forEach((crew) => {
+  const flightCrew = flight.flight_crew || [];
+  const cabinCrew = flight.cabin_crew || [];
+  const passengers = flight.passengers || [];
+
+  flightCrew.forEach((crew: any) => {
     if (crew.seat_number) {
       seatMap.set(crew.seat_number, { ...crew, type: "Flight Crew" });
     }
   });
 
-  flight.cabin_crew.forEach((crew) => {
+  cabinCrew.forEach((crew: any) => {
     if (crew.seat_number) {
       seatMap.set(crew.seat_number, { ...crew, type: "Cabin Crew" });
     }
   });
 
-  flight.passengers.forEach((passenger) => {
+  passengers.forEach((passenger: any) => {
     if (passenger.seat_number) {
       seatMap.set(passenger.seat_number, { ...passenger, type: "Passenger" });
     }
@@ -122,7 +125,7 @@ export function PlaneView({ flight }: PlaneViewProps) {
           Plane View - Seat Map
         </CardTitle>
         <CardDescription>
-          {flight.vehicle_type.aircraft_name} ({flight.vehicle_type.aircraft_code}) - Hover over seats for details
+          {vehicleType.aircraft_name || 'Aircraft'} ({vehicleType.aircraft_code || 'N/A'}) - Hover over seats for details
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -211,9 +214,9 @@ export function PlaneView({ flight }: PlaneViewProps) {
         </div>
 
         <div className="mt-4 text-sm text-gray-600">
-          <div>Total Seats: {flight.vehicle_type.total_seats}</div>
+          <div>Total Seats: {vehicleType.total_seats || 'N/A'}</div>
           <div>Occupied: {seatMap.size}</div>
-          <div>Available: {flight.vehicle_type.total_seats - seatMap.size}</div>
+          <div>Available: {(vehicleType.total_seats || 0) - seatMap.size}</div>
         </div>
       </CardContent>
     </Card>
