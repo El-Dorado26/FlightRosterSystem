@@ -6,7 +6,7 @@ from typing import List, Optional
 from core.database import get_db
 from core.models import Passenger
 from core.schemas import PassengerResponse, PassengerCreate, PassengerUpdate
-from core.redis import get_cache, set_cache, delete_cache
+from core.redis import get_cache, set_cache, delete_cache, build_cache_key
 import json
 
 router = APIRouter()
@@ -15,13 +15,6 @@ PASSENGER_LIST_CACHE_KEY = "passengers:all"
 PASSENGER_CACHE_KEY_TEMPLATE = "passenger:{passenger_id}"
 FLIGHT_PASSENGERS_CACHE_KEY_TEMPLATE = "passengers:flight:{flight_id}"
 PASSENGER_TTL = 300
-
-
-def _build_passenger_cache_key(passenger_id: int) -> str:
-    return PASSENGER_CACHE_KEY_TEMPLATE.format(passenger_id=passenger_id)
-
-def _build_flight_passengers_cache_key(flight_id: int) -> str:
-    return FLIGHT_PASSENGERS_CACHE_KEY_TEMPLATE.format(flight_id=flight_id)
 
 
 # Helper Functions
@@ -39,7 +32,7 @@ def check_seat_availability(db: Session, flight_id: int, seat_number: str) -> bo
 @router.get("/", response_model=List[PassengerResponse])
 def list_passengers(flight_id: Optional[int] = None, db: Session = Depends(get_db)):
     """Get all passengers, optionally filtered by flight."""
-    cache_key = _build_flight_passengers_cache_key(flight_id) if flight_id else PASSENGER_LIST_CACHE_KEY
+    cache_key = build_cache_key(FLIGHT_PASSENGERS_CACHE_KEY_TEMPLATE, flight_id=flight_id) if flight_id else PASSENGER_LIST_CACHE_KEY
     
     try:
         cached = get_cache(cache_key)
@@ -68,7 +61,7 @@ def list_passengers(flight_id: Optional[int] = None, db: Session = Depends(get_d
 @router.get("/{passenger_id}", response_model=PassengerResponse)
 def get_passenger(passenger_id: int, db: Session = Depends(get_db)):
     """Get a specific passenger by ID."""
-    cache_key = _build_passenger_cache_key(passenger_id)
+    cache_key = build_cache_key(PASSENGER_CACHE_KEY_TEMPLATE, passenger_id=passenger_id)
     
     try:
         cached = get_cache(cache_key)
@@ -138,7 +131,7 @@ def create_passenger(
     
     try:
         delete_cache(PASSENGER_LIST_CACHE_KEY)
-        delete_cache(_build_flight_passengers_cache_key(flight_id))
+        delete_cache(build_cache_key(FLIGHT_PASSENGERS_CACHE_KEY_TEMPLATE, flight_id=flight_id))
     except Exception:
         pass
     
@@ -175,8 +168,8 @@ def update_passenger(
     
     try:
         delete_cache(PASSENGER_LIST_CACHE_KEY)
-        delete_cache(_build_passenger_cache_key(passenger_id))
-        delete_cache(_build_flight_passengers_cache_key(existing_passenger.flight_id))
+        delete_cache(build_cache_key(PASSENGER_CACHE_KEY_TEMPLATE, passenger_id=passenger_id))
+        delete_cache(build_cache_key(FLIGHT_PASSENGERS_CACHE_KEY_TEMPLATE, flight_id=existing_passenger.flight_id))
     except Exception:
         pass
     
@@ -196,8 +189,8 @@ def delete_passenger(passenger_id: int, db: Session = Depends(get_db)):
     
     try:
         delete_cache(PASSENGER_LIST_CACHE_KEY)
-        delete_cache(_build_passenger_cache_key(passenger_id))
-        delete_cache(_build_flight_passengers_cache_key(flight_id))
+        delete_cache(build_cache_key(PASSENGER_CACHE_KEY_TEMPLATE, passenger_id=passenger_id))
+        delete_cache(build_cache_key(FLIGHT_PASSENGERS_CACHE_KEY_TEMPLATE, flight_id=flight_id))
     except Exception:
         pass
     

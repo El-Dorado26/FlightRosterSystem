@@ -27,7 +27,7 @@ from core.schemas import (
     ConnectingFlightResponse,
     ConnectingFlightCreate,
 )
-from core.redis import get_cache, set_cache, delete_cache
+from core.redis import get_cache, set_cache, delete_cache, build_cache_key
 
 router = APIRouter()
 
@@ -56,10 +56,6 @@ def _validate_airport_code(code: str) -> None:
             status_code=400,
             detail="Invalid airport code format. Expected 3 letters (AAA).",
         )
-
-
-def _build_flight_cache_key(flight_id: int) -> str:
-    return FLIGHT_CACHE_KEY_TEMPLATE.format(flight_id=flight_id)
 
 
 # Airline Endpoints
@@ -211,7 +207,7 @@ async def list_flights(db: Session = Depends(get_db)):
 @router.get("/{flight_id}", response_model=FlightInfoResponse)
 async def get_flight(flight_id: int, db: Session = Depends(get_db)):
     start_time = time.time()
-    cache_key = _build_flight_cache_key(flight_id)
+    cache_key = build_cache_key(FLIGHT_CACHE_KEY_TEMPLATE, flight_id=flight_id)
     
     try:
         cached = get_cache(cache_key)
@@ -303,7 +299,7 @@ async def create_flight(flight: FlightInfoCreate, db: Session = Depends(get_db))
     # Cache invalidate
     try:
         delete_cache(FLIGHT_LIST_CACHE_KEY)
-        delete_cache(_build_flight_cache_key(db_flight.id))
+        delete_cache(build_cache_key(FLIGHT_CACHE_KEY_TEMPLATE, flight_id=db_flight.id))
     except Exception:
         pass
 
@@ -335,7 +331,7 @@ async def update_flight(
     # Cache invalidate
     try:
         delete_cache(FLIGHT_LIST_CACHE_KEY)
-        delete_cache(_build_flight_cache_key(flight_id))
+        delete_cache(build_cache_key(FLIGHT_CACHE_KEY_TEMPLATE, flight_id=flight_id))
     except Exception:
         pass
 
@@ -359,7 +355,7 @@ async def delete_flight(flight_id: int, db: Session = Depends(get_db)):
     # Cache invalidate
     try:
         delete_cache(FLIGHT_LIST_CACHE_KEY)
-        delete_cache(_build_flight_cache_key(flight_id))
+        delete_cache(build_cache_key(FLIGHT_CACHE_KEY_TEMPLATE, flight_id=flight_id))
     except Exception:
         pass
 

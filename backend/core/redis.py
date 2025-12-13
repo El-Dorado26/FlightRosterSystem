@@ -73,3 +73,14 @@ def exists(key: str) -> bool:
         print(f"Error checking key existence: {e}")
         return False
 
+
+def build_cache_key(template: str, **kwargs) -> str:
+    """
+    Build a cache key from a template and keyword arguments.
+    
+    Example:
+        build_cache_key("flight:{flight_id}", flight_id=123)
+        build_cache_key("passenger:{passenger_id}", passenger_id=456)
+    """
+    return template.format(**kwargs)
+
