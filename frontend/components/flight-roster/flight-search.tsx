@@ -20,6 +20,16 @@ export interface FlightFilters {
   sourceAirport?: string;
   destinationAirport?: string;
   airlineId?: number;
+  sourceCountry?: string;
+  destinationCountry?: string;
+  sourceCity?: string;
+  destinationCity?: string;
+  status?: string;
+  vehicleType?: string;
+  minDistance?: number;
+  maxDistance?: number;
+  minDuration?: number;
+  maxDuration?: number;
 }
 
 // Quick date presets
@@ -257,6 +267,136 @@ export function FlightSearch({ onSearch, onClear }: FlightSearchProps) {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Flight Status */}
+            <div className="space-y-2">
+              <Label htmlFor="status" className="text-sm font-medium text-gray-700">
+                Flight Status
+              </Label>
+              <Select
+                value={filters.status}
+                onValueChange={(value) => updateFilter('status', value)}
+              >
+                <SelectTrigger id="status">
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value="scheduled">Scheduled</SelectItem>
+                  <SelectItem value="boarding">Boarding</SelectItem>
+                  <SelectItem value="in-flight">In Flight</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="delayed">Delayed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Countries & Cities */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="sourceCountry" className="text-sm font-medium text-gray-700">
+                  From Country
+                </Label>
+                <Input
+                  id="sourceCountry"
+                  placeholder="e.g., USA, UK"
+                  value={filters.sourceCountry || ''}
+                  onChange={(e) => updateFilter('sourceCountry', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="destinationCountry" className="text-sm font-medium text-gray-700">
+                  To Country
+                </Label>
+                <Input
+                  id="destinationCountry"
+                  placeholder="e.g., France, Turkey"
+                  value={filters.destinationCountry || ''}
+                  onChange={(e) => updateFilter('destinationCountry', e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="sourceCity" className="text-sm font-medium text-gray-700">
+                  From City
+                </Label>
+                <Input
+                  id="sourceCity"
+                  placeholder="e.g., New York, London"
+                  value={filters.sourceCity || ''}
+                  onChange={(e) => updateFilter('sourceCity', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="destinationCity" className="text-sm font-medium text-gray-700">
+                  To City
+                </Label>
+                <Input
+                  id="destinationCity"
+                  placeholder="e.g., Paris, Istanbul"
+                  value={filters.destinationCity || ''}
+                  onChange={(e) => updateFilter('destinationCity', e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Flight Distance Range */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-700">
+                Flight Distance (km)
+              </Label>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  type="number"
+                  placeholder="Min"
+                  value={filters.minDistance || ''}
+                  onChange={(e) => updateFilter('minDistance', e.target.value ? parseFloat(e.target.value) : undefined)}
+                />
+                <Input
+                  type="number"
+                  placeholder="Max"
+                  value={filters.maxDistance || ''}
+                  onChange={(e) => updateFilter('maxDistance', e.target.value ? parseFloat(e.target.value) : undefined)}
+                />
+              </div>
+            </div>
+
+            {/* Flight Duration Range */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-700">
+                Flight Duration (minutes)
+              </Label>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  type="number"
+                  placeholder="Min"
+                  value={filters.minDuration || ''}
+                  onChange={(e) => updateFilter('minDuration', e.target.value ? parseInt(e.target.value) : undefined)}
+                />
+                <Input
+                  type="number"
+                  placeholder="Max"
+                  value={filters.maxDuration || ''}
+                  onChange={(e) => updateFilter('maxDuration', e.target.value ? parseInt(e.target.value) : undefined)}
+                />
+              </div>
+            </div>
+
+            {/* Vehicle Type */}
+            <div className="space-y-2">
+              <Label htmlFor="vehicleType" className="text-sm font-medium text-gray-700">
+                Aircraft Type
+              </Label>
+              <Input
+                id="vehicleType"
+                placeholder="e.g., B738, A320, B77W"
+                value={filters.vehicleType || ''}
+                onChange={(e) => updateFilter('vehicleType', e.target.value.toUpperCase())}
+              />
             </div>
 
             {/* Action Buttons */}

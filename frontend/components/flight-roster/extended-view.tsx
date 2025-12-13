@@ -1,6 +1,5 @@
 "use client";
 
-import { Flight } from "@/lib/mock-data";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -8,10 +7,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, PlaneTakeoff, UserCheck } from "lucide-react";
 
 interface ExtendedViewProps {
-  flight: Flight;
+  flight: any;
 }
 
 export function ExtendedView({ flight }: ExtendedViewProps) {
+  const flightCrew = flight.flight_crew || [];
+  const cabinCrew = flight.cabin_crew || [];
+  const passengers = flight.passengers || [];
+
   return (
     <Card>
       <CardHeader>
@@ -25,15 +28,15 @@ export function ExtendedView({ flight }: ExtendedViewProps) {
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="flight-crew" className="flex items-center gap-2">
               <PlaneTakeoff className="h-4 w-4" />
-              Flight Crew ({flight.flight_crew.length})
+              Flight Crew ({flightCrew.length})
             </TabsTrigger>
             <TabsTrigger value="cabin-crew" className="flex items-center gap-2">
               <UserCheck className="h-4 w-4" />
-              Cabin Crew ({flight.cabin_crew.length})
+              Cabin Crew ({cabinCrew.length})
             </TabsTrigger>
             <TabsTrigger value="passengers" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
-              Passengers ({flight.passengers.length})
+              Passengers ({passengers.length})
             </TabsTrigger>
           </TabsList>
 
@@ -54,40 +57,44 @@ export function ExtendedView({ flight }: ExtendedViewProps) {
                     <TableHead>Languages</TableHead>
                     <TableHead>Hours Flown</TableHead>
                     <TableHead>Max Distance (km)</TableHead>
+                    <TableHead>Vehicle Restriction</TableHead>
                     <TableHead>Seat</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {flight.flight_crew.map((crew) => (
+                  {flightCrew.map((crew: any) => (
                     <TableRow key={crew.id}>
                       <TableCell className="font-medium">{crew.name}</TableCell>
                       <TableCell className="font-mono text-xs">{crew.employee_id}</TableCell>
                       <TableCell>
                         <Badge variant={crew.role === "Captain" ? "default" : "secondary"}>
-                          {crew.role}
+                          {crew.role || "Pilot"}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-mono text-xs">{crew.license_number}</TableCell>
                       <TableCell>
                         <Badge
                           variant={
-                            crew.seniority_level === "Senior"
+                            crew.seniority_level === "senior"
                               ? "default"
-                              : crew.seniority_level === "Junior"
+                              : crew.seniority_level === "junior"
                               ? "secondary"
                               : "outline"
                           }
                         >
-                          {crew.seniority_level}
+                          {crew.seniority_level || "N/A"}
                         </Badge>
                       </TableCell>
                       <TableCell>{crew.age}</TableCell>
                       <TableCell>{crew.gender}</TableCell>
                       <TableCell>{crew.nationality}</TableCell>
-                      <TableCell className="text-xs">{crew.languages ? crew.languages.join(", ") : "-"}</TableCell>
-                      <TableCell>{crew.hours_flown.toLocaleString()}</TableCell>
-                      <TableCell>{crew.max_allowed_distance_km.toLocaleString()}</TableCell>
-                      <TableCell className="font-mono text-xs">{crew.seat_number}</TableCell>
+                      <TableCell className="text-xs">
+                        {Array.isArray(crew.languages) ? crew.languages.join(", ") : crew.languages || "-"}
+                      </TableCell>
+                      <TableCell>{crew.hours_flown ? crew.hours_flown.toLocaleString() : "-"}</TableCell>
+                      <TableCell>{crew.max_allowed_distance_km ? crew.max_allowed_distance_km.toLocaleString() : "-"}</TableCell>
+                      <TableCell>{crew.vehicle_type_restriction_id || "None"}</TableCell>
+                      <TableCell className="font-mono text-xs">{crew.seat_number || "-"}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -99,7 +106,7 @@ export function ExtendedView({ flight }: ExtendedViewProps) {
               <div className="text-sm text-blue-800 space-y-1">
                 <div>✓ At least one Senior and one Junior pilot required</div>
                 <div>✓ Maximum two trainees allowed per flight</div>
-                <div>✓ All crew must be qualified for {flight.vehicle_type.aircraft_name}</div>
+                <div>✓ All crew must be qualified for {flight.vehicle_type?.aircraft_name || "this aircraft"}</div>
               </div>
             </div>
           </TabsContent>
@@ -117,37 +124,45 @@ export function ExtendedView({ flight }: ExtendedViewProps) {
                     <TableHead>Gender</TableHead>
                     <TableHead>Nationality</TableHead>
                     <TableHead>Languages</TableHead>
+                    <TableHead>Vehicle Restrictions</TableHead>
                     <TableHead>Special Skills</TableHead>
                     <TableHead>Seat</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {flight.cabin_crew.map((crew) => (
+                  {cabinCrew.map((crew: any) => (
                     <TableRow key={crew.id}>
                       <TableCell className="font-medium">{crew.name}</TableCell>
                       <TableCell className="font-mono text-xs">{crew.employee_id}</TableCell>
                       <TableCell>
                         <Badge
                           variant={
-                            crew.attendant_type === "Chief"
+                            crew.attendant_type === "chief"
                               ? "default"
-                              : crew.attendant_type === "Chef"
+                              : crew.attendant_type === "chef"
                               ? "secondary"
                               : "outline"
                           }
                         >
-                          {crew.attendant_type}
+                          {crew.attendant_type || "Regular"}
                         </Badge>
                       </TableCell>
                       <TableCell>{crew.age}</TableCell>
                       <TableCell>{crew.gender}</TableCell>
                       <TableCell>{crew.nationality}</TableCell>
-                      <TableCell className="text-xs">{crew.languages ? crew.languages.join(", ") : "-"}</TableCell>
                       <TableCell className="text-xs">
-                        {crew.dish_recipes ? (
+                        {Array.isArray(crew.languages) ? crew.languages.join(", ") : crew.languages || "-"}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {crew.vehicle_restrictions && Array.isArray(crew.vehicle_restrictions) 
+                          ? crew.vehicle_restrictions.join(", ") 
+                          : "None"}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {crew.recipes && Array.isArray(crew.recipes) ? (
                           <div className="space-y-1">
                             <div className="font-semibold">Recipes:</div>
-                            {crew.dish_recipes.map((recipe, idx) => (
+                            {crew.recipes.map((recipe: string, idx: number) => (
                               <div key={idx}>• {recipe}</div>
                             ))}
                           </div>
@@ -155,7 +170,7 @@ export function ExtendedView({ flight }: ExtendedViewProps) {
                           "-"
                         )}
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{crew.seat_number}</TableCell>
+                      <TableCell className="font-mono text-xs">{crew.seat_number || "-"}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -190,13 +205,13 @@ export function ExtendedView({ flight }: ExtendedViewProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {flight.passengers.map((passenger) => (
+                  {passengers.map((passenger: any) => (
                     <TableRow key={passenger.id}>
                       <TableCell className="font-medium">{passenger.name}</TableCell>
                       <TableCell className="font-mono text-xs">{passenger.passport_number}</TableCell>
                       <TableCell>
-                        <Badge variant={passenger.seat_type === "Business" ? "default" : "outline"}>
-                          {passenger.seat_type}
+                        <Badge variant={passenger.seat_type === "Business" || passenger.class === "Business" ? "default" : "outline"}>
+                          {passenger.seat_type || passenger.class || "Economy"}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-mono text-xs">
@@ -207,8 +222,8 @@ export function ExtendedView({ flight }: ExtendedViewProps) {
                       <TableCell>{passenger.nationality}</TableCell>
                       <TableCell className="text-xs">
                         {passenger.parent_id && <Badge variant="secondary">Infant (No Seat)</Badge>}
-                        {passenger.affiliated_passengers && passenger.affiliated_passengers.length > 0 && (
-                          <Badge variant="outline">Group Travel</Badge>
+                        {passenger.affiliated_passenger_ids && passenger.affiliated_passenger_ids.length > 0 && (
+                          <Badge variant="outline">Group Travel ({passenger.affiliated_passenger_ids.length})</Badge>
                         )}
                         {!passenger.seat_number && !passenger.parent_id && (
                           <Badge variant="destructive">Seat Pending</Badge>
@@ -225,15 +240,15 @@ export function ExtendedView({ flight }: ExtendedViewProps) {
                 <h4 className="font-semibold text-green-900 mb-2">Passenger Statistics</h4>
                 <div className="text-sm text-green-800 space-y-1">
                   <div>
-                    Business Class: {flight.passengers.filter((p) => p.seat_type === "Business").length}
+                    Business Class: {passengers.filter((p: any) => p.seat_type === "Business" || p.class === "Business").length}
                   </div>
                   <div>
-                    Economy Class: {flight.passengers.filter((p) => p.seat_type === "Economy").length}
+                    Economy Class: {passengers.filter((p: any) => p.seat_type === "Economy" || p.class === "Economy").length}
                   </div>
-                  <div>Infants (0-2 years): {flight.passengers.filter((p) => p.age <= 2).length}</div>
+                  <div>Infants (0-2 years): {passengers.filter((p: any) => p.age <= 2).length}</div>
                   <div>
                     Seats Assigned:{" "}
-                    {flight.passengers.filter((p) => p.seat_number && !p.parent_id).length}
+                    {passengers.filter((p: any) => p.seat_number && !p.parent_id).length}
                   </div>
                 </div>
               </div>

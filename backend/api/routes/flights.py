@@ -1,8 +1,9 @@
 import re
 from typing import List
+import time
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from core.database import get_db
 from core import models
@@ -142,27 +143,73 @@ async def create_vehicle_type(
 @router.get("/", response_model=List[FlightInfoResponse])
 async def list_flights(db: Session = Depends(get_db)):
     """
-    Get all flights.
+    Get all flights (lightweight - basic info only).
 
     Returns flights with:
     - Flight number (AANNNN)
     - Date/time, duration (minutes), distance (km)
     - Source/destination airports
-    - Vehicle type
+    - Vehicle type with seating plan
+    
+    For full details including crew and passengers, use GET /{flight_id}
     """
-    flights = db.query(models.FlightInfo).all()
-    return flights  # Pydantic from_attributes ilişkileri otomatik map’ler
+    flights = db.query(models.FlightInfo).options(
+        joinedload(models.FlightInfo.vehicle_type),
+        joinedload(models.FlightInfo.airline),
+        joinedload(models.FlightInfo.departure_airport),
+        joinedload(models.FlightInfo.arrival_airport),
+        joinedload(models.FlightInfo.shared_flight_info).joinedload(models.SharedFlight.primary_airline),
+        joinedload(models.FlightInfo.shared_flight_info).joinedload(models.SharedFlight.secondary_airline),
+        joinedload(models.FlightInfo.connecting_flight)
+        # Note: Not loading flight_crew, cabin_crew, passengers for performance
+        # Use GET /{flight_id} endpoint for full details
+    ).all()
+    return flights
 
 """Get a specific flight by ID with source/destination airport info and vehicle details."""
 @router.get("/{flight_id}", response_model=FlightInfoResponse)
 async def get_flight(flight_id: int, db: Session = Depends(get_db)):
+    start_time = time.time()
+    
     flight = (
         db.query(models.FlightInfo)
+        .options(
+            joinedload(models.FlightInfo.vehicle_type),
+            joinedload(models.FlightInfo.airline),
+            joinedload(models.FlightInfo.departure_airport),
+            joinedload(models.FlightInfo.arrival_airport),
+            joinedload(models.FlightInfo.shared_flight_info).joinedload(models.SharedFlight.primary_airline),
+            joinedload(models.FlightInfo.shared_flight_info).joinedload(models.SharedFlight.secondary_airline),
+            joinedload(models.FlightInfo.connecting_flight),
+            joinedload(models.FlightInfo.flight_crew).joinedload(models.FlightCrew.languages),
+            joinedload(models.FlightInfo.cabin_crew),
+            joinedload(models.FlightInfo.passengers)
+        )
         .filter(models.FlightInfo.id == flight_id)
         .first()
     )
+    
+    query_time = time.time() - start_time
+    print(f"Flight query took {query_time:.3f}s")
+    
     if not flight:
         raise HTTPException(status_code=404, detail="Flight not found")
+    
+    # Manually fetch crew assignments if not loaded via relationships
+    # This ensures we get crew that are assigned via FlightCrewAssignment table
+    if not flight.flight_crew:
+        crew_start = time.time()
+        assigned_crew = (
+            db.query(models.FlightCrew)
+            .join(models.FlightCrewAssignment)
+            .filter(models.FlightCrewAssignment.flight_id == flight_id)
+            .options(joinedload(models.FlightCrew.languages))
+            .all()
+        )
+        flight.flight_crew = assigned_crew
+        print(f"Crew assignment query took {time.time() - crew_start:.3f}s")
+    
+    print(f"Total response time: {time.time() - start_time:.3f}s")
     return flight
 
 
@@ -380,12 +427,10 @@ async def export_flight_roster_json(flight_id: int, db: Session = Depends(get_db
     """
     Export flight roster as JSON.
     """
-    # Get flight info
     flight = db.query(models.FlightInfo).filter(models.FlightInfo.id == flight_id).first()
     if not flight:
         raise HTTPException(status_code=404, detail="Flight not found")
     
-    # Get crew members assigned
     crew_members = db.query(models.FlightCrew).join(models.FlightCrewAssignment).filter(
         models.FlightCrewAssignment.flight_id == flight_id
     ).all()

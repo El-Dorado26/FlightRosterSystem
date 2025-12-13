@@ -6,22 +6,21 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plane, Lock, Mail, User, Eye, EyeOff } from "lucide-react";
-import { authService } from "@/lib/auth";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AuthPageProps {
   onLogin: () => void;
 }
 
 export default function AuthPage({ onLogin }: AuthPageProps) {
+  const { login, register } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState("login");
 
-  // Login form state
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
 
-  // Signup form state
   const [signupName, setSignupName] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
@@ -40,11 +39,7 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
     }
 
     try {
-      const response = await authService.login({
-        email: loginEmail,
-        password: loginPassword,
-      });
-
+      await login(loginEmail, loginPassword);
       // Call the onLogin callback to redirect
       onLogin();
     } catch (error: any) {
@@ -57,7 +52,6 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
     setSignupError("");
     setSignupSuccess(false);
 
-    // Validation
     if (!signupName || !signupEmail || !signupPassword || !signupConfirmPassword) {
       setSignupError("Please fill in all fields");
       return;
@@ -80,20 +74,8 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
     }
 
     try {
-      await authService.register({
-        email: signupEmail,
-        password: signupPassword,
-        full_name: signupName,
-        role: signupRole as 'admin' | 'manager' | 'user' | 'viewer',
-      });
-
-      // After successful registration, automatically log them in
-      await authService.login({
-        email: signupEmail,
-        password: signupPassword,
-      });
-
-      // Redirect to dashboard
+      await register(signupEmail, signupPassword, signupName, signupRole);
+      // Redirect to dashboard after successful registration
       onLogin();
     } catch (error: any) {
       setSignupError(error.message || "Registration failed. Please try again.");

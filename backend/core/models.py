@@ -76,7 +76,9 @@ class FlightInfo(Base):
     id = Column(Integer, primary_key=True, index=True)
     flight_number = Column(String(6), nullable=False, index=True)
     airline_id = Column(Integer, ForeignKey("airlines.id"), nullable=False)
-    departure_time = Column(DateTime, nullable=False)
+    date = Column(DateTime, nullable=False)  # Flight date
+    departure_time = Column(DateTime, nullable=False)  # Full departure datetime
+    arrival_time = Column(DateTime, nullable=False)  # Full arrival datetime
     flight_duration_minutes = Column(Integer, nullable=False)
     flight_distance_km = Column(Float, nullable=False)
     departure_airport_id = Column(Integer, ForeignKey("airport_locations.id"), nullable=False)
@@ -152,6 +154,7 @@ class FlightCrew(Base):
     max_allowed_distance_km = Column(Float, nullable=False)
     vehicle_type_restriction_id = Column(Integer, ForeignKey("vehicle_types.id"), nullable=True)
     hours_flown = Column(Integer, default=0)
+    seat_number = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     flight_id = Column(Integer, ForeignKey("flights.id"), nullable=True)
 
@@ -174,6 +177,7 @@ class CabinCrew(Base):
     languages = Column(JSON, nullable=False)  # List of languages
     recipes = Column(JSON, nullable=True)  # List of dish recipes (for chefs only)
     vehicle_restrictions = Column(JSON, nullable=True)  # List of vehicle type IDs
+    seat_number = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     flight_id = Column(Integer, ForeignKey("flights.id"), nullable=True)
 
@@ -185,13 +189,21 @@ class Passenger(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
+    age = Column(Integer, nullable=False)
+    gender = Column(String, nullable=False)
+    nationality = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     phone = Column(String, nullable=True)
     passport_number = Column(String, unique=True, nullable=False)
+    seat_type = Column(String, nullable=False)  # business or economy
+    seat_number = Column(String, nullable=True)  # e.g., "12A", "23F"
+    parent_id = Column(Integer, ForeignKey("passengers.id"), nullable=True)  # For infants (age 0-2)
+    affiliated_passenger_ids = Column(JSON, nullable=True)  # List of 1-2 passenger IDs for neighboring seats
     created_at = Column(DateTime, server_default=func.now())
     flight_id = Column(Integer, ForeignKey("flights.id"), nullable=True)
 
     flight = relationship("FlightInfo", back_populates="passengers")
+    parent = relationship("Passenger", remote_side=[id], backref="infants")
 
 class FlightCrewAssignment(Base):
     __tablename__ = "flight_crew_assignment"
@@ -203,4 +215,19 @@ class FlightCrewAssignment(Base):
     assigned_at = Column(DateTime, server_default=func.now())
 
     crew = relationship("FlightCrew", back_populates="assignments")
+    flight = relationship("FlightInfo")
+
+
+class Roster(Base):
+    __tablename__ = "rosters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    flight_id = Column(Integer, ForeignKey("flights.id"), nullable=False)
+    roster_name = Column(String, nullable=False)
+    generated_at = Column(DateTime, server_default=func.now())
+    generated_by = Column(String, nullable=True)  # User who generated it
+    database_type = Column(String, default="sql")  # sql or nosql
+    roster_data = Column(JSON, nullable=False)  # Complete roster snapshot
+    additional_info = Column(JSON, nullable=True)  # Additional metadata
+    
     flight = relationship("FlightInfo")

@@ -224,3 +224,20 @@ async def get_crew_by_vehicle(vehicle_type_id: int, db: Session = Depends(get_db
     
     return qualified_crew
 
+
+@router.get("/flight/{flight_id}", response_model=List[CabinCrewResponse])
+async def get_cabin_crew_by_flight(flight_id: int, db: Session = Depends(get_db)):
+    """
+    Get all cabin crew members assigned to a specific flight.
+    
+    Returns cabin crew members who are assigned to the given flight ID.
+    """
+    flight = db.query(models.FlightInfo).filter(models.FlightInfo.id == flight_id).first()
+    if not flight:
+        raise HTTPException(status_code=404, detail="Flight not found")
+    
+    cabin_crew = db.query(models.CabinCrew).filter(
+        models.CabinCrew.flight_id == flight_id
+    ).all()
+    
+    return cabin_crew

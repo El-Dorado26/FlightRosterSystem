@@ -12,34 +12,38 @@ interface TabularViewProps {
 
 export function TabularView({ flight }: TabularViewProps) {
   // Combine all people into a single list
+  const flightCrew = flight.flight_crew || [];
+  const cabinCrew = flight.cabin_crew || [];
+  const passengers = flight.passengers || [];
+
   const allPeople = [
-    ...flight.flight_crew.map((crew) => ({
+    ...flightCrew.map((crew: any) => ({
       type: "Flight Crew",
       name: crew.name,
       id: crew.employee_id,
-      role: crew.role,
-      seniority: crew.seniority_level,
-      seat: crew.seat_number,
+      role: crew.role || "Pilot",
+      seniority: crew.seniority_level || "-",
+      seat: crew.seat_number || "-",
       age: crew.age,
       nationality: crew.nationality,
-      languages: crew.languages ? crew.languages.join(", ") : "-",
+      languages: Array.isArray(crew.languages) ? crew.languages.join(", ") : crew.languages || "-",
     })),
-    ...flight.cabin_crew.map((crew) => ({
+    ...cabinCrew.map((crew: any) => ({
       type: "Cabin Crew",
       name: crew.name,
       id: crew.employee_id,
-      role: crew.attendant_type,
+      role: crew.attendant_type || "Attendant",
       seniority: "-",
-      seat: crew.seat_number,
+      seat: crew.seat_number || "-",
       age: crew.age,
       nationality: crew.nationality,
-      languages: crew.languages ? crew.languages.join(", ") : "-",
+      languages: Array.isArray(crew.languages) ? crew.languages.join(", ") : crew.languages || "-",
     })),
-    ...flight.passengers.map((passenger) => ({
+    ...passengers.map((passenger: any) => ({
       type: "Passenger",
       name: passenger.name,
       id: passenger.passport_number,
-      role: passenger.seat_type,
+      role: passenger.seat_type || passenger.class || "Economy",
       seniority: "-",
       seat: passenger.seat_number || (passenger.parent_id ? "Infant (No Seat)" : "Not Assigned"),
       age: passenger.age,
