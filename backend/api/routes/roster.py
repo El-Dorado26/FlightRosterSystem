@@ -500,4 +500,3 @@ async def delete_roster(roster_id: str, db: Session = Depends(get_db)):
         pass
     
     raise HTTPException(status_code=404, detail="Roster not found")
-

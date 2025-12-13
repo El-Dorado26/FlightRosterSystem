@@ -127,3 +127,4 @@ def delete_roster_from_mongodb(roster_id: str) -> bool:
         return result.deleted_count > 0
     except Exception:
         return False
+
