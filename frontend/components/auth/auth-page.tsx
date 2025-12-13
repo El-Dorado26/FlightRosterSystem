@@ -290,11 +290,11 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
                       </Button>
                       <Button
                         type="button"
-                        variant={signupRole === "crew" ? "default" : "outline"}
-                        onClick={() => setSignupRole("crew")}
+                        variant={signupRole === "user" ? "default" : "outline"}
+                        onClick={() => setSignupRole("user")}
                         className="w-full"
                       >
-                        Crew
+                        User
                       </Button>
                     </div>
                   </div>
