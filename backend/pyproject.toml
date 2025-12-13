@@ -17,4 +17,5 @@ dependencies = [
     "python-multipart>=0.0.6",
     "upstash-redis>=1.5.0",
     "psycopg2-binary>=2.9.9",
+    "pymongo[srv]>=4.6.0",
 ]
