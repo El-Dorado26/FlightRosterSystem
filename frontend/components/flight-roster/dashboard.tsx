@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Flight } from "@/lib/mock-data";
-import { FlightSearch, FlightFilters } from "@/components/flight-roster/flight-search";
+import { FlightFilters } from "@/components/flight-roster/flight-search";
 import { FlightSelector } from "@/components/flight-roster/flight-selector";
 import { TabularView } from "@/components/flight-roster/tabular-view";
 import { PlaneView } from "@/components/flight-roster/plane-view";
@@ -13,9 +12,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { LayoutGrid, Table2, Plane, Download, Database, BarChart3, LogOut, Search } from "lucide-react";
+import { LayoutGrid, Table2, Plane, Download, Database, BarChart3, LogOut, Search, Loader2 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+const STORAGE_KEYS = {
+  FLIGHTS: 'dashboard_flights',
+  SELECTED_FLIGHT_ID: 'dashboard_selected_flight_id',
+  ACTIVE_VIEW: 'dashboard_active_view',
+};
 
 export default function FlightRosterDashboard() {
   const [flights, setFlights] = useState<any[]>([]);
@@ -27,8 +32,15 @@ export default function FlightRosterDashboard() {
   const [generateRosterDialogOpen, setGenerateRosterDialogOpen] = useState(false);
   const [savedRosters, setSavedRosters] = useState<any[]>([]);
   const [databaseType, setDatabaseType] = useState<"sql" | "nosql">("sql");
+  const [crewSelectionMode, setCrewSelectionMode] = useState<"auto" | "manual">("auto");
+  const [seatAssignmentMode, setSeatAssignmentMode] = useState<"auto" | "manual">("auto");
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [flightCache, setFlightCache] = useState<Map<number, any>>(new Map());
+  const [isFetching, setIsFetching] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [loadingFlightId, setLoadingFlightId] = useState<number | null>(null);
+  const [isGeneratingRoster, setIsGeneratingRoster] = useState(false);
   const [exportOptions, setExportOptions] = useState({
     flightDetails: true,
     flightCrew: true,
@@ -37,74 +49,172 @@ export default function FlightRosterDashboard() {
   });
   const { logout } = useAuth();
 
-  // Fetch all flights on mount
   useEffect(() => {
-    fetchFlights();
+    const restoreState = () => {
+      try {
+        if (typeof window !== 'undefined') {
+          const cachedFlights = sessionStorage.getItem(STORAGE_KEYS.FLIGHTS);
+          if (cachedFlights) {
+            const flightsData = JSON.parse(cachedFlights);
+            setFlights(flightsData);
+            setFilteredFlights(flightsData);
+          }
+          
+          const cachedView = sessionStorage.getItem(STORAGE_KEYS.ACTIVE_VIEW);
+          if (cachedView) {
+            setActiveView(cachedView);
+          }
+          
+          const cachedFlightId = sessionStorage.getItem(STORAGE_KEYS.SELECTED_FLIGHT_ID);
+          if (cachedFlightId && cachedFlights) {
+            const flightId = parseInt(cachedFlightId);
+            const flightsData = JSON.parse(cachedFlights);
+            // Find the flight in cached data
+            const flight = flightsData.find((f: any) => f.id === flightId);
+            if (flight) {
+              // Fetch full details for this flight
+              fetchFlightDetails(flightId);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to restore dashboard state:', error);
+      }
+    };
+
+    restoreState();
   }, []);
+
+  // Fetch all flights on mount (only if not cached)
+  useEffect(() => {
+    if (isInitialLoad) {
+      const cachedFlights = typeof window !== 'undefined' 
+        ? sessionStorage.getItem(STORAGE_KEYS.FLIGHTS) 
+        : null;
+      
+      if (!cachedFlights) {
+        fetchFlights();
+      } else {
+        setLoading(false);
+      }
+      setIsInitialLoad(false);
+    }
+  }, [isInitialLoad]);
 
   const fetchFlights = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_URL}/flight-info/`);
+      const response = await fetch(${API_URL}/flight-info/);
       if (response.ok) {
         const data = await response.json();
-        if (data.length > 0) {
-          setFlights(data);
-          setFilteredFlights(data);
-          // Fetch detailed data for first flight
-          await fetchFlightDetails(data[0].id);
-        } else {
-          // Use mock data if no flights from API
-          const mockFlights = getMockFlights();
-          setFlights(mockFlights);
-          setFilteredFlights(mockFlights);
-          setSelectedFlight(mockFlights[0]);
+        setFlights(data);
+        setFilteredFlights(data);
+        
+        // Save to sessionStorage
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem(STORAGE_KEYS.FLIGHTS, JSON.stringify(data));
         }
-      } else {
-        // Use mock data if API fails
-        const mockFlights = getMockFlights();
-        setFlights(mockFlights);
-        setFilteredFlights(mockFlights);
-        setSelectedFlight(mockFlights[0]);
+        
+        if (data.length > 0) {
+          // Only fetch first flight if no flight is currently selected
+          if (!selectedFlight) {
+            await fetchFlightDetails(data[0].id);
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to fetch flights:', error);
-      // Use mock data if fetch fails
-      const mockFlights = getMockFlights();
-      setFlights(mockFlights);
-      setFilteredFlights(mockFlights);
-      setSelectedFlight(mockFlights[0]);
     } finally {
       setLoading(false);
     }
   };
 
   const fetchFlightDetails = async (flightId: number) => {
+    // Prevent duplicate fetches
+    if (isFetching) {
+      console.log('Already fetching, skipping duplicate request');
+      return;
+    }
+    
+    // Check cache first
+    if (flightCache.has(flightId)) {
+      console.log(Using cached data for flight ${flightId});
+      setSelectedFlight(flightCache.get(flightId));
+      setLoadingFlightId(null);
+      return;
+    }
+    
     try {
-      const flightResponse = await fetch(`${API_URL}/flight-info/${flightId}`);
+      setIsFetching(true);
+      setLoadingFlightId(flightId);
+      
+      // Single optimized request - backend returns all data including crew and passengers
+      const flightResponse = await fetch(${API_URL}/flight-info/${flightId});
+      if (!flightResponse.ok) {
+        throw new Error('Failed to fetch flight details');
+      }
+      
       const flightData = await flightResponse.json();
+      
+      // The backend now includes flight_crew, cabin_crew, and passengers in the response
+      // Only make additional requests if data is missing (fallback)
+      if (!flightData.flight_crew || flightData.flight_crew.length === 0) {
+        const flightCrewResponse = await fetch(${API_URL}/flight-crew/flights/${flightId}/crew);
+        if (flightCrewResponse.ok) {
+          flightData.flight_crew = await flightCrewResponse.json();
+        }
+      }
+      
+      if (!flightData.cabin_crew || flightData.cabin_crew.length === 0) {
+        const cabinCrewResponse = await fetch(${API_URL}/cabin-crew/flight/${flightId});
+        if (cabinCrewResponse.ok) {
+          flightData.cabin_crew = await cabinCrewResponse.json();
+        }
+      }
+      
+      if (!flightData.passengers || flightData.passengers.length === 0) {
+        const passengersResponse = await fetch(${API_URL}/passenger/?flight_id=${flightId});
+        if (passengersResponse.ok) {
+          flightData.passengers = await passengersResponse.json();
+        }
+      }
 
-      const flightCrewResponse = await fetch(`${API_URL}/flight-crew/flights/${flightId}/crew`);
-      const flightCrewData = flightCrewResponse.ok ? await flightCrewResponse.json() : [];
-
-      const cabinCrewResponse = await fetch(`${API_URL}/cabin-crew/flight/${flightId}`);
-      const cabinCrewData = cabinCrewResponse.ok ? await cabinCrewResponse.json() : [];
-
-      const passengersResponse = await fetch(`${API_URL}/passenger/?flight_id=${flightId}`);
-      const passengersData = passengersResponse.ok ? await passengersResponse.json() : [];
-
-      const completeFlightData = {
-        ...flightData,
-        flight_crew: flightCrewData,
-        cabin_crew: cabinCrewData,
-        passengers: passengersData
-      };
-
-      setSelectedFlight(completeFlightData);
+      // Cache the result
+      setFlightCache(prev => new Map(prev).set(flightId, flightData));
+      setSelectedFlight(flightData);
+      
+      // Save to sessionStorage
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(STORAGE_KEYS.SELECTED_FLIGHT_ID, flightId.toString());
+      }
     } catch (error) {
       console.error('Failed to fetch flight details:', error);
+    } finally {
+      setIsFetching(false);
+      setLoadingFlightId(null);
     }
   };
+
+  const handleFlightSelect = async (flight: any) => {
+    // Immediately update UI to show selected flight (optimistic update)
+    const basicFlightData = {
+      ...flight,
+      flight_crew: [],
+      cabin_crew: [],
+      passengers: []
+    };
+    setSelectedFlight(basicFlightData);
+    
+    // Then fetch full details
+    await fetchFlightDetails(flight.id);
+  };
+
+  // Save active view to sessionStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && activeView) {
+      sessionStorage.setItem(STORAGE_KEYS.ACTIVE_VIEW, activeView);
+    }
+  }, [activeView]);
 
   const handleSearch = async (filters: FlightFilters) => {
     console.log('Search triggered with filters:', filters);
@@ -173,77 +283,6 @@ export default function FlightRosterDashboard() {
     }
   };
 
-  const getMockFlights = () => {
-    return [
-      {
-        id: 1,
-        flight_number: "AA100",
-        airline_id: "AA",
-        airline: { name: "American Airlines", code: "AA" },
-        departure_airport: { airport_code: "JFK", name: "John F. Kennedy International" },
-        arrival_airport: { airport_code: "LAX", name: "Los Angeles International" },
-        departure_time: new Date().toISOString(),
-        arrival_time: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
-        status: "scheduled",
-        vehicle_type: {
-          type_code: "B738",
-          total_seats: 189,
-          seating_plan: { business: 16, economy: 150, rows: 32, seats_per_row: 6 }
-        },
-        flight_crew: [
-          { id: 1, name: "John Smith", role: "Captain", age: 45, gender: "M", nationality: "USA", employee_id: "FC001", license_number: "ATL12345", seniority_level: "Senior", max_allowed_distance_km: 15000, hours_flown: 8500, seat_number: "Cockpit-1" },
-          { id: 2, name: "Jane Doe", role: "First Officer", age: 38, gender: "F", nationality: "USA", employee_id: "FC002", license_number: "ATL12346", seniority_level: "Mid", max_allowed_distance_km: 12000, hours_flown: 5200, seat_number: "Cockpit-2" }
-        ],
-        cabin_crew: [
-          { id: 1, name: "Sarah Johnson", attendant_type: "Purser", age: 35, gender: "F", nationality: "USA", employee_id: "CC001", seat_number: "Crew-1" },
-          { id: 2, name: "Mike Wilson", attendant_type: "Flight Attendant", age: 28, gender: "M", nationality: "USA", employee_id: "CC002", seat_number: "Crew-2" },
-          { id: 3, name: "Emily Brown", attendant_type: "Flight Attendant", age: 26, gender: "F", nationality: "USA", employee_id: "CC003", seat_number: "Crew-3" }
-        ],
-        passengers: [
-          { id: 1, name: "Alice Anderson", seat_number: "1A", seat_type: "Business", age: 42, gender: "F", nationality: "USA", passport_number: "P123456" },
-          { id: 2, name: "Bob Baker", seat_number: "1B", seat_type: "Business", age: 39, gender: "M", nationality: "UK", passport_number: "P123457" },
-          { id: 3, name: "Charlie Chen", seat_number: "12A", seat_type: "Economy", age: 28, gender: "M", nationality: "China", passport_number: "P123458" },
-          { id: 4, name: "Diana Davis", seat_number: "12B", seat_type: "Economy", age: 31, gender: "F", nationality: "Canada", passport_number: "P123459" },
-          { id: 5, name: "Ethan Evans", seat_number: "12C", seat_type: "Economy", age: 45, gender: "M", nationality: "Australia", passport_number: "P123460" }
-        ]
-      },
-      {
-        id: 2,
-        flight_number: "DL200",
-        airline_id: "DL",
-        airline: { name: "Delta Airlines", code: "DL" },
-        departure_airport: { airport_code: "ATL", name: "Atlanta International" },
-        arrival_airport: { airport_code: "LHR", name: "London Heathrow" },
-        departure_time: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-        arrival_time: new Date(Date.now() + 10 * 60 * 60 * 1000).toISOString(),
-        status: "scheduled",
-        vehicle_type: {
-          type_code: "A350",
-          total_seats: 280,
-          seating_plan: { business: 32, economy: 248, rows: 45, seats_per_row: 9 }
-        },
-        flight_crew: [
-          { id: 3, name: "Robert Wilson", role: "Captain", age: 52, gender: "M", nationality: "USA", employee_id: "FC003", license_number: "ATL12347", seniority_level: "Senior", max_allowed_distance_km: 18000, hours_flown: 12000, seat_number: "Cockpit-1" }
-        ],
-        cabin_crew: [
-          { id: 4, name: "Lisa Martinez", attendant_type: "Chief", age: 40, gender: "F", nationality: "USA", employee_id: "CC004", seat_number: "Crew-1" }
-        ],
-        passengers: []
-      }
-    ];
-  };
-
-  const handleQuickSearch = () => {
-    console.log('Quick search clicked');
-    console.log('Flights available:', flights.length);
-    
-    const flightToShow = flights.length > 0 ? flights[0] : getMockFlights()[0];
-    
-    setSelectedFlight(flightToShow);
-    setFilteredFlights([flightToShow]);
-    setActiveView("tabular");
-  };
-
   const handleClearSearch = () => {
     setFilteredFlights(flights);
     if (flights.length > 0) {
@@ -259,7 +298,7 @@ export default function FlightRosterDashboard() {
         timestamp: new Date().toISOString(),
         flight_number: selectedFlight.flight_number,
         airline: selectedFlight.airline.airline_name,
-        route: `${selectedFlight.departure_airport.airport_code} → ${selectedFlight.arrival_airport.airport_code}`,
+        route: ${selectedFlight.departure_airport.airport_code} → ${selectedFlight.arrival_airport.airport_code},
         exported_sections: []
       }
     };
@@ -291,7 +330,7 @@ export default function FlightRosterDashboard() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `flight-roster-${selectedFlight.flight_number}-${Date.now()}.json`;
+    a.download = flight-roster-${selectedFlight.flight_number}-${Date.now()}.json;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -300,47 +339,65 @@ export default function FlightRosterDashboard() {
     console.log("[MOCK] Exported flight data:", data);
     setExportDialogOpen(false);
     
-    // Show success notification
-    alert(`✅ Export successful!\n\nFlight: ${selectedFlight.flight_number}\nSections: ${data.export_metadata.exported_sections.join(", ")}\n\nFile downloaded.`);
+    alert(✅ Export successful!\n\nFlight: ${selectedFlight.flight_number}\nSections: ${data.export_metadata.exported_sections.join(", ")}\n\nFile downloaded.);
   };
 
   const handleGenerateRoster = async () => {
     if (!selectedFlight) return;
 
+    setIsGeneratingRoster(true);
     try {
-      // Generate roster via API
-      const response = await fetch(`${API_URL}/roster/generate`, {
+      const response = await fetch(${API_URL}/roster/generate, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           flight_id: selectedFlight.id,
-          roster_name: `${selectedFlight.flight_number} - ${new Date().toLocaleDateString()}`,
+          roster_name: ${selectedFlight.flight_number} - ${new Date().toLocaleDateString()},
           generated_by: "Dashboard User",
-          database_type: databaseType
+          database_type: databaseType,
+          auto_select_crew: crewSelectionMode === "auto",
+          auto_assign_seats: seatAssignmentMode === "auto"
         })
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate roster');
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to generate roster');
       }
 
       const rosterData = await response.json();
       setGenerateRosterDialogOpen(false);
       
-      // Show success notification
-      alert(`✅ Roster generated and saved to ${databaseType.toUpperCase()} database!\n\nRoster ID: ${rosterData.id}\nFlight: ${selectedFlight.flight_number}\nGenerated at: ${new Date(rosterData.generated_at).toLocaleString()}\n\nYou can view it in "View Saved Rosters"`);
+      // Show detailed success notification
+      const metadata = rosterData.metadata || {};
+      alert(✅ Roster generated and saved to ${databaseType.toUpperCase()} database!\n\n +
+        Roster ID: ${rosterData.id}\n +
+        Flight: ${selectedFlight.flight_number}\n +
+        Generated at: ${new Date(rosterData.generated_at).toLocaleString()}\n\n +
+        Crew Selection: ${crewSelectionMode.toUpperCase()}\n +
+        Flight Crew: ${metadata.total_flight_crew || 0}\n +
+        Cabin Crew: ${metadata.total_cabin_crew || 0}\n\n +
+        Seat Assignment: ${seatAssignmentMode.toUpperCase()}\n +
+        Seats Assigned: ${metadata.seats_assigned || 0}/${metadata.total_passengers || 0}\n\n +
+        You can view it in "View Saved Rosters"
+      );
       
-    } catch (error) {
+      // Refresh flight details to show updated assignments
+      await fetchFlightDetails(selectedFlight.id);
+      
+    } catch (error: any) {
       console.error('Failed to generate roster:', error);
-      alert(`❌ Failed to generate roster. Please try again.`);
+      alert(❌ Failed to generate roster.\n\n${error.message || 'Please try again.'});
+    } finally {
+      setIsGeneratingRoster(false);
     }
   };
 
   const fetchSavedRosters = async () => {
     try {
-      const response = await fetch(`${API_URL}/roster/`);
+      const response = await fetch(${API_URL}/roster/);
       if (response.ok) {
         const rosters = await response.json();
         setSavedRosters(rosters);
@@ -352,7 +409,7 @@ export default function FlightRosterDashboard() {
 
   const handleViewRoster = async (rosterId: number) => {
     try {
-      const response = await fetch(`${API_URL}/roster/${rosterId}`);
+      const response = await fetch(${API_URL}/roster/${rosterId});
       if (response.ok) {
         const roster = await response.json();
         // Create a flight object from roster data
@@ -381,13 +438,13 @@ export default function FlightRosterDashboard() {
 
   const handleExportRoster = async (rosterId: number) => {
     try {
-      const response = await fetch(`${API_URL}/roster/${rosterId}/download/json`);
+      const response = await fetch(${API_URL}/roster/${rosterId}/download/json);
       if (response.ok) {
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `roster_${rosterId}.json`;
+        a.download = roster_${rosterId}.json;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -403,7 +460,7 @@ export default function FlightRosterDashboard() {
     if (!confirm('Are you sure you want to delete this roster?')) return;
 
     try {
-      const response = await fetch(`${API_URL}/roster/${rosterId}`, {
+      const response = await fetch(${API_URL}/roster/${rosterId}, {
         method: 'DELETE'
       });
       if (response.ok) {
@@ -512,6 +569,71 @@ export default function FlightRosterDashboard() {
                 </div>
               </div>
 
+              <div className="space-y-3">
+                <label className="text-sm font-medium">Crew Selection Method</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setCrewSelectionMode("auto")}
+                    className={`flex items-center gap-3 p-4 border-2 rounded-lg transition-all ${
+                      crewSelectionMode === "auto"
+                        ? "border-green-600 bg-green-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <LayoutGrid className="h-8 w-8 text-green-600" />
+                    <div className="text-left">
+                      <div className="font-semibold">Automatic</div>
+                      <div className="text-xs text-gray-600">AI selects qualified crew</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setCrewSelectionMode("manual")}
+                    disabled
+                    className="flex items-center gap-3 p-4 border-2 rounded-lg opacity-50 cursor-not-allowed"
+                  >
+                    <LayoutGrid className="h-8 w-8 text-gray-400" />
+                    <div className="text-left">
+                      <div className="font-semibold">Manual</div>
+                      <div className="text-xs text-gray-600">Coming soon</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-sm font-medium">Passenger Seat Assignment</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setSeatAssignmentMode("auto")}
+                    className={`flex items-center gap-3 p-4 border-2 rounded-lg transition-all ${
+                      seatAssignmentMode === "auto"
+                        ? "border-green-600 bg-green-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <Plane className="h-8 w-8 text-green-600" />
+                    <div className="text-left">
+                      <div className="font-semibold">Automatic</div>
+                      <div className="text-xs text-gray-600">Auto-assign empty seats</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setSeatAssignmentMode("manual")}
+                    className={`flex items-center gap-3 p-4 border-2 rounded-lg transition-all ${
+                      seatAssignmentMode === "manual"
+                        ? "border-blue-600 bg-blue-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <Plane className="h-8 w-8 text-blue-600" />
+                    <div className="text-left">
+                      <div className="font-semibold">Keep Current</div>
+                      <div className="text-xs text-gray-600">Don't change seats</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
               {selectedFlight && (
                 <div className="bg-gray-50 rounded-lg p-4 text-sm">
                   <div className="grid grid-cols-2 gap-2">
@@ -545,12 +667,21 @@ export default function FlightRosterDashboard() {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setGenerateRosterDialogOpen(false)}>
+              <Button variant="outline" onClick={() => setGenerateRosterDialogOpen(false)} disabled={isGeneratingRoster}>
                 Cancel
               </Button>
-              <Button onClick={handleGenerateRoster} className="bg-green-600 hover:bg-green-700">
-                <LayoutGrid className="h-4 w-4 mr-2" />
-                Generate & Save Roster
+              <Button onClick={handleGenerateRoster} className="bg-green-600 hover:bg-green-700" disabled={isGeneratingRoster}>
+                {isGeneratingRoster ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Generating Roster...
+                  </>
+                ) : (
+                  <>
+                    <LayoutGrid className="h-4 w-4 mr-2" />
+                    Generate & Save Roster
+                  </>
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -734,64 +865,87 @@ export default function FlightRosterDashboard() {
             </Card>
           )}
 
-          {!loading && filteredFlights.length === 0 && (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <p className="text-gray-600 text-lg">No flights found</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {!loading && filteredFlights.length > 0 && (
+          {!loading && (
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               {/* Left Sidebar - Flight Selector */}
               <div className="lg:col-span-1">
-                <FlightSelector
-                  flights={filteredFlights}
-                  selectedFlight={selectedFlight}
-                  onFlightSelect={setSelectedFlight}
-                />
+                {filteredFlights.length > 0 ? (
+                  <FlightSelector
+                    flights={filteredFlights}
+                    selectedFlight={selectedFlight}
+                    onFlightSelect={handleFlightSelect}
+                    isLoading={loadingFlightId !== null}
+                  />
+                ) : (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Search className="h-5 w-5" />
+                        Available Flights
+                      </CardTitle>
+                      <CardDescription>No flights available</CardDescription>
+                    </CardHeader>
+                    <CardContent className="text-center py-8">
+                      <Plane className="h-16 w-16 mx-auto text-gray-300 mb-4" />
+                      <p className="text-sm text-gray-500">
+                        No flights found in the database.
+                        <br />
+                        Please add flights to get started.
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
 
               {/* Main Content Area */}
               <div className="lg:col-span-3">
                 {selectedFlight ? (
-                  <Tabs value={activeView} onValueChange={setActiveView} className="w-full">
-                    <TabsList className="grid w-full grid-cols-4">
-                      <TabsTrigger value="statistics" className="flex items-center gap-2">
-                        <BarChart3 className="h-4 w-4" />
-                        Statistics
-                      </TabsTrigger>
-                      <TabsTrigger value="tabular" className="flex items-center gap-2">
-                        <Table2 className="h-4 w-4" />
-                        Tabular View
-                      </TabsTrigger>
-                      <TabsTrigger value="plane" className="flex items-center gap-2">
-                        <Plane className="h-4 w-4" />
-                        Plane View
-                      </TabsTrigger>
-                      <TabsTrigger value="extended" className="flex items-center gap-2">
-                        <LayoutGrid className="h-4 w-4" />
-                        Extended View
-                      </TabsTrigger>
-                    </TabsList>
+                  <div className="relative">
+                    {loadingFlightId !== null && (
+                      <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
+                        <div className="text-center">
+                          <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-3" />
+                          <p className="text-sm text-gray-600 font-medium">Loading flight data...</p>
+                        </div>
+                      </div>
+                    )}
+                    <Tabs value={activeView} onValueChange={setActiveView} className="w-full">
+                      <TabsList className="grid w-full grid-cols-4">
+                        <TabsTrigger value="statistics" className="flex items-center gap-2">
+                          <BarChart3 className="h-4 w-4" />
+                          Statistics
+                        </TabsTrigger>
+                        <TabsTrigger value="tabular" className="flex items-center gap-2">
+                          <Table2 className="h-4 w-4" />
+                          Tabular View
+                        </TabsTrigger>
+                        <TabsTrigger value="plane" className="flex items-center gap-2">
+                          <Plane className="h-4 w-4" />
+                          Plane View
+                        </TabsTrigger>
+                        <TabsTrigger value="extended" className="flex items-center gap-2">
+                          <LayoutGrid className="h-4 w-4" />
+                          Extended View
+                        </TabsTrigger>
+                      </TabsList>
 
-                    <TabsContent value="statistics" className="mt-6">
-                      <FlightStatistics flight={selectedFlight} />
-                    </TabsContent>
+                      <TabsContent value="statistics" className="mt-6">
+                        <FlightStatistics flight={selectedFlight} />
+                      </TabsContent>
 
-                    <TabsContent value="tabular" className="mt-6">
-                      <TabularView flight={selectedFlight} />
-                    </TabsContent>
+                      <TabsContent value="tabular" className="mt-6">
+                        <TabularView flight={selectedFlight} />
+                      </TabsContent>
 
-                    <TabsContent value="plane" className="mt-6">
-                      <PlaneView flight={selectedFlight} />
-                    </TabsContent>
+                      <TabsContent value="plane" className="mt-6">
+                        <PlaneView flight={selectedFlight} />
+                      </TabsContent>
 
-                    <TabsContent value="extended" className="mt-6">
-                      <ExtendedView flight={selectedFlight} />
-                    </TabsContent>
-                  </Tabs>
+                      <TabsContent value="extended" className="mt-6">
+                        <ExtendedView flight={selectedFlight} />
+                      </TabsContent>
+                    </Tabs>
+                  </div>
                 ) : (
                   <Card className="border-none shadow-lg bg-gradient-to-br from-blue-50 to-purple-50">
                     <CardContent className="pt-20 pb-20">
@@ -802,28 +956,33 @@ export default function FlightRosterDashboard() {
                         </div>
                         
                         <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                          Welcome to Flight Roster System
+                          {filteredFlights.length === 0 
+                            ? "No Flights Available" 
+                            : "Welcome to Flight Roster System"}
                         </h2>
                         
                         <p className="text-lg text-gray-600 mb-8 leading-relaxed">
-                          Select a flight from the sidebar to explore comprehensive roster information, 
-                          seat assignments, crew details, and passenger manifests.
+                          {filteredFlights.length === 0
+                            ? "The database currently has no flights. Please add flights to the system to begin managing rosters."
+                            : "Select a flight from the sidebar to explore comprehensive roster information, seat assignments, crew details, and passenger manifests."}
                         </p>
                         
-                        <div className="flex items-center justify-center gap-6 text-sm text-gray-500">
-                          <div className="flex items-center gap-2">
-                            <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
-                            <span>Real-time Data</span>
+                        {filteredFlights.length > 0 && (
+                          <div className="flex items-center justify-center gap-6 text-sm text-gray-500">
+                            <div className="flex items-center gap-2">
+                              <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
+                              <span>Real-time Data</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="h-2 w-2 bg-purple-500 rounded-full"></div>
+                              <span>Multiple Views</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+                              <span>Export Ready</span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <div className="h-2 w-2 bg-purple-500 rounded-full"></div>
-                            <span>Multiple Views</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-                            <span>Export Ready</span>
-                          </div>
-                        </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
