@@ -8,7 +8,6 @@ import { TabularView } from "@/components/flight-roster/tabular-view";
 import { PlaneView } from "@/components/flight-roster/plane-view";
 import { ExtendedView } from "@/components/flight-roster/extended-view";
 import { FlightStatistics } from "@/components/flight-roster/flight-statistics";
-import { FeatureGuard } from "@/components/auth/role-guard";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +23,9 @@ export default function FlightRosterDashboard() {
   const [selectedFlight, setSelectedFlight] = useState<any | null>(null);
   const [activeView, setActiveView] = useState<string>("statistics");
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [rostersDialogOpen, setRostersDialogOpen] = useState(false);
+  const [generateRosterDialogOpen, setGenerateRosterDialogOpen] = useState(false);
+  const [savedRosters, setSavedRosters] = useState<any[]>([]);
   const [databaseType, setDatabaseType] = useState<"sql" | "nosql">("sql");
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -50,7 +51,8 @@ export default function FlightRosterDashboard() {
         if (data.length > 0) {
           setFlights(data);
           setFilteredFlights(data);
-          setSelectedFlight(data[0]);
+          // Fetch detailed data for first flight
+          await fetchFlightDetails(data[0].id);
         } else {
           // Use mock data if no flights from API
           const mockFlights = getMockFlights();
@@ -77,22 +79,52 @@ export default function FlightRosterDashboard() {
     }
   };
 
+  const fetchFlightDetails = async (flightId: number) => {
+    try {
+      const flightResponse = await fetch(`${API_URL}/flight-info/${flightId}`);
+      const flightData = await flightResponse.json();
+
+      const flightCrewResponse = await fetch(`${API_URL}/flight-crew/flights/${flightId}/crew`);
+      const flightCrewData = flightCrewResponse.ok ? await flightCrewResponse.json() : [];
+
+      const cabinCrewResponse = await fetch(`${API_URL}/cabin-crew/flight/${flightId}`);
+      const cabinCrewData = cabinCrewResponse.ok ? await cabinCrewResponse.json() : [];
+
+      const passengersResponse = await fetch(`${API_URL}/passenger/?flight_id=${flightId}`);
+      const passengersData = passengersResponse.ok ? await passengersResponse.json() : [];
+
+      const completeFlightData = {
+        ...flightData,
+        flight_crew: flightCrewData,
+        cabin_crew: cabinCrewData,
+        passengers: passengersData
+      };
+
+      setSelectedFlight(completeFlightData);
+    } catch (error) {
+      console.error('Failed to fetch flight details:', error);
+    }
+  };
+
   const handleSearch = async (filters: FlightFilters) => {
     console.log('Search triggered with filters:', filters);
     
-    // For testing: Just show flight view immediately with mock data or first flight
+    // For flight number search, find and load the specific flight
     if (filters.flightNumber) {
       setLoading(true);
       
-      // If we have flights, use the first one, otherwise wait a bit
-      setTimeout(() => {
-        if (flights.length > 0) {
-          setFilteredFlights([flights[0]]);
-          setSelectedFlight(flights[0]);
+      try {
+        const found = flights.find(f => f.flight_number === filters.flightNumber);
+        if (found) {
+          await fetchFlightDetails(found.id);
+          setFilteredFlights([found]);
+          setActiveView("tabular");
         }
-        setActiveView("tabular");
+      } catch (error) {
+        console.error('Failed to load flight:', error);
+      } finally {
         setLoading(false);
-      }, 100);
+      }
       
       return;
     }
@@ -129,7 +161,7 @@ export default function FlightRosterDashboard() {
 
       setFilteredFlights(filtered);
       if (filtered.length > 0) {
-        setSelectedFlight(filtered[0]);
+        await fetchFlightDetails(filtered[0].id);
         setActiveView("tabular");
       } else {
         setSelectedFlight(null);
@@ -272,48 +304,116 @@ export default function FlightRosterDashboard() {
     alert(`✅ Export successful!\n\nFlight: ${selectedFlight.flight_number}\nSections: ${data.export_metadata.exported_sections.join(", ")}\n\nFile downloaded.`);
   };
 
-  const handleSaveToDatabase = (dbType: "sql" | "nosql") => {
+  const handleGenerateRoster = async () => {
     if (!selectedFlight) return;
 
-    // Create mock database save structure
-    const timestamp = new Date().toISOString();
-    const saveData = {
-      timestamp,
-      database_type: dbType,
-      flight_info: {
-        flight_number: selectedFlight.flight_number,
-        airline: selectedFlight.airline.airline_name,
-        route: `${selectedFlight.departure_airport.airport_code} → ${selectedFlight.arrival_airport.airport_code}`,
-        departure: selectedFlight.departure_time,
-        arrival: selectedFlight.arrival_time,
-      },
-      crew_count: {
-        flight_crew: selectedFlight.flight_crew.length,
-        cabin_crew: selectedFlight.cabin_crew.length,
-      },
-      passenger_count: selectedFlight.passengers.length,
-      total_capacity: selectedFlight.vehicle_type.total_seats,
-    };
+    try {
+      // Generate roster via API
+      const response = await fetch(`${API_URL}/roster/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          flight_id: selectedFlight.id,
+          roster_name: `${selectedFlight.flight_number} - ${new Date().toLocaleDateString()}`,
+          generated_by: "Dashboard User",
+          database_type: databaseType
+        })
+      });
 
-    // Mock save action
-    console.log(`[MOCK] Saving to ${dbType.toUpperCase()} Database:`, saveData);
-    
-    // Download as JSON file to simulate database save
-    const json = JSON.stringify(saveData, null, 2);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${dbType}-save-${selectedFlight.flight_number}-${Date.now()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    setSaveDialogOpen(false);
-    
-    // Show success notification
-    alert(`✅ Successfully saved to ${dbType.toUpperCase()} database!\n\nFlight: ${selectedFlight.flight_number}\nTimestamp: ${timestamp}\n\nFile downloaded as backup.`);
+      if (!response.ok) {
+        throw new Error('Failed to generate roster');
+      }
+
+      const rosterData = await response.json();
+      setGenerateRosterDialogOpen(false);
+      
+      // Show success notification
+      alert(`✅ Roster generated and saved to ${databaseType.toUpperCase()} database!\n\nRoster ID: ${rosterData.id}\nFlight: ${selectedFlight.flight_number}\nGenerated at: ${new Date(rosterData.generated_at).toLocaleString()}\n\nYou can view it in "View Saved Rosters"`);
+      
+    } catch (error) {
+      console.error('Failed to generate roster:', error);
+      alert(`❌ Failed to generate roster. Please try again.`);
+    }
+  };
+
+  const fetchSavedRosters = async () => {
+    try {
+      const response = await fetch(`${API_URL}/roster/`);
+      if (response.ok) {
+        const rosters = await response.json();
+        setSavedRosters(rosters);
+      }
+    } catch (error) {
+      console.error('Failed to fetch rosters:', error);
+    }
+  };
+
+  const handleViewRoster = async (rosterId: number) => {
+    try {
+      const response = await fetch(`${API_URL}/roster/${rosterId}`);
+      if (response.ok) {
+        const roster = await response.json();
+        // Create a flight object from roster data
+        const flightFromRoster = {
+          ...roster.roster_data.flight_info,
+          flight_crew: roster.roster_data.flight_crew || [],
+          cabin_crew: roster.roster_data.cabin_crew || [],
+          passengers: roster.roster_data.passengers || [],
+          airline: roster.roster_data.flight_info.airline,
+          departure_airport: roster.roster_data.flight_info.route.departure,
+          arrival_airport: roster.roster_data.flight_info.route.arrival,
+          vehicle_type: roster.roster_data.flight_info.aircraft,
+          departure_time: roster.roster_data.flight_info.schedule.departure_time,
+          arrival_time: roster.roster_data.flight_info.schedule.arrival_time,
+          date: roster.roster_data.flight_info.schedule.date,
+        };
+        setSelectedFlight(flightFromRoster);
+        setRostersDialogOpen(false);
+        setActiveView("tabular");
+      }
+    } catch (error) {
+      console.error('Failed to view roster:', error);
+      alert('Failed to load roster. Please try again.');
+    }
+  };
+
+  const handleExportRoster = async (rosterId: number) => {
+    try {
+      const response = await fetch(`${API_URL}/roster/${rosterId}/download/json`);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `roster_${rosterId}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error('Failed to export roster:', error);
+      alert('Failed to export roster. Please try again.');
+    }
+  };
+
+  const handleDeleteRoster = async (rosterId: number) => {
+    if (!confirm('Are you sure you want to delete this roster?')) return;
+
+    try {
+      const response = await fetch(`${API_URL}/roster/${rosterId}`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        alert('Roster deleted successfully!');
+        fetchSavedRosters(); // Refresh the list
+      }
+    } catch (error) {
+      console.error('Failed to delete roster:', error);
+      alert('Failed to delete roster. Please try again.');
+    }
   };
 
   return (
@@ -329,13 +429,27 @@ export default function FlightRosterDashboard() {
           </div>
           {selectedFlight && (
             <div className="flex gap-2">
+              <Button 
+                onClick={() => setGenerateRosterDialogOpen(true)} 
+                className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+              >
+                <LayoutGrid className="h-4 w-4" />
+                Generate Roster
+              </Button>
+              <Button 
+                onClick={() => {
+                  fetchSavedRosters();
+                  setRostersDialogOpen(true);
+                }} 
+                variant="outline" 
+                className="flex items-center gap-2"
+              >
+                <Database className="h-4 w-4" />
+                View Saved Rosters
+              </Button>
               <Button onClick={() => setExportDialogOpen(true)} variant="outline" className="flex items-center gap-2">
                 <Download className="h-4 w-4" />
                 Export
-              </Button>
-              <Button onClick={() => setSaveDialogOpen(true)} className="flex items-center gap-2">
-                <Database className="h-4 w-4" />
-                Save to Database
               </Button>
               <Button onClick={logout} variant="destructive" className="flex items-center gap-2">
                 <LogOut className="h-4 w-4" />
@@ -344,6 +458,103 @@ export default function FlightRosterDashboard() {
             </div>
           )}
         </div>
+
+        {/* Generate Roster Dialog */}
+        <Dialog open={generateRosterDialogOpen} onOpenChange={setGenerateRosterDialogOpen}>
+          <DialogContent onClose={() => setGenerateRosterDialogOpen(false)}>
+            <DialogHeader>
+              <DialogTitle>Generate Flight Roster</DialogTitle>
+              <DialogDescription>
+                Generate a complete roster snapshot for {selectedFlight?.flight_number}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 className="font-semibold text-blue-900 mb-2">What will be included:</h3>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>✓ Complete flight information (route, schedule, aircraft)</li>
+                  <li>✓ All flight crew members (pilots, engineers)</li>
+                  <li>✓ All cabin crew members (attendants, chefs)</li>
+                  <li>✓ All passenger details</li>
+                  <li>✓ Occupancy and crew statistics</li>
+                </ul>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-sm font-medium">Select Database Type</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setDatabaseType("sql")}
+                    className={`flex items-center gap-3 p-4 border-2 rounded-lg transition-all ${
+                      databaseType === "sql"
+                        ? "border-blue-600 bg-blue-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <Database className="h-8 w-8 text-blue-600" />
+                    <div className="text-left">
+                      <div className="font-semibold">SQL</div>
+                      <div className="text-xs text-gray-600">PostgreSQL database</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setDatabaseType("nosql")}
+                    disabled
+                    className="flex items-center gap-3 p-4 border-2 rounded-lg opacity-50 cursor-not-allowed"
+                  >
+                    <Database className="h-8 w-8 text-gray-400" />
+                    <div className="text-left">
+                      <div className="font-semibold">NoSQL</div>
+                      <div className="text-xs text-gray-600">Not available yet</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {selectedFlight && (
+                <div className="bg-gray-50 rounded-lg p-4 text-sm">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-gray-600">Flight:</span>
+                      <span className="ml-2 font-semibold">{selectedFlight.flight_number}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Aircraft:</span>
+                      <span className="ml-2 font-semibold">{selectedFlight.vehicle_type?.aircraft_code}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Flight Crew:</span>
+                      <span className="ml-2 font-semibold">{selectedFlight.flight_crew?.length || 0}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Cabin Crew:</span>
+                      <span className="ml-2 font-semibold">{selectedFlight.cabin_crew?.length || 0}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Passengers:</span>
+                      <span className="ml-2 font-semibold">{selectedFlight.passengers?.length || 0}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Capacity:</span>
+                      <span className="ml-2 font-semibold">{selectedFlight.vehicle_type?.total_seats}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setGenerateRosterDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleGenerateRoster} className="bg-green-600 hover:bg-green-700">
+                <LayoutGrid className="h-4 w-4 mr-2" />
+                Generate & Save Roster
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Export Dialog */}
         <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
@@ -445,59 +656,68 @@ export default function FlightRosterDashboard() {
           </DialogContent>
         </Dialog>
 
-        {/* Save to Database Dialog */}
-        <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
-          <DialogContent onClose={() => setSaveDialogOpen(false)}>
+        {/* Saved Rosters Dialog */}
+        <Dialog open={rostersDialogOpen} onOpenChange={setRostersDialogOpen}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto" onClose={() => setRostersDialogOpen(false)}>
             <DialogHeader>
-              <DialogTitle>Save to Database</DialogTitle>
+              <DialogTitle>Saved Rosters</DialogTitle>
               <DialogDescription>
-                Select the database type to save the flight roster for {selectedFlight?.flight_number}
+                View, retrieve, and export previously saved rosters from the database
               </DialogDescription>
             </DialogHeader>
             
             <div className="space-y-4 py-4">
-              <div className="space-y-3">
-                <label className="text-sm font-medium">Database Type</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setDatabaseType("sql")}
-                    className={`flex items-center gap-3 p-4 border-2 rounded-lg transition-all ${
-                      databaseType === "sql"
-                        ? "border-blue-600 bg-blue-50"
-                        : "border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
-                    <Database className="h-8 w-8 text-blue-600" />
-                    <div className="text-left">
-                      <div className="font-semibold">SQL</div>
-                      <div className="text-xs text-gray-600">Relational database</div>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setDatabaseType("nosql")}
-                    className={`flex items-center gap-3 p-4 border-2 rounded-lg transition-all ${
-                      databaseType === "nosql"
-                        ? "border-blue-600 bg-blue-50"
-                        : "border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
-                    <Database className="h-8 w-8 text-green-600" />
-                    <div className="text-left">
-                      <div className="font-semibold">NoSQL</div>
-                      <div className="text-xs text-gray-600">Document database</div>
-                    </div>
-                  </button>
+              {savedRosters.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No saved rosters found. Generate and save a roster first.
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-3">
+                  {savedRosters.map((roster) => (
+                    <div key={roster.id} className="border rounded-lg p-4 hover:bg-gray-50">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-lg">{roster.roster_name}</h3>
+                          <div className="text-sm text-gray-600 mt-1 space-y-1">
+                            <p>Roster ID: #{roster.id}</p>
+                            <p>Generated: {new Date(roster.generated_at).toLocaleString()}</p>
+                            <p>Database: {roster.database_type.toUpperCase()}</p>
+                            {roster.generated_by && <p>By: {roster.generated_by}</p>}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleViewRoster(roster.id)}
+                          >
+                            View
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleExportRoster(roster.id)}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="destructive"
+                            onClick={() => handleDeleteRoster(roster.id)}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={() => handleSaveToDatabase(databaseType)}>
-                <Database className="h-4 w-4 mr-2" />
-                Save to {databaseType.toUpperCase()}
+              <Button variant="outline" onClick={() => setRostersDialogOpen(false)}>
+                Close
               </Button>
             </DialogFooter>
           </DialogContent>
