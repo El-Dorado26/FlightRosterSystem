@@ -197,7 +197,7 @@ async def list_flights(db: Session = Depends(get_db)):
     
     try:
         flights_data = [FlightInfoResponse.model_validate(f).model_dump(mode='json') for f in flights]
-        set_cache(FLIGHT_LIST_CACHE_KEY, json.dumps(flights_data), ttl=FLIGHT_LIST_TTL)
+        set_cache(FLIGHT_LIST_CACHE_KEY, json.dumps(flights_data), ex=FLIGHT_LIST_TTL)
         print(f"[CACHE SET] Stored {len(flights)} flights in Redis with TTL={FLIGHT_LIST_TTL}s")
     except Exception as e:
         print(f"[CACHE ERROR] Failed to cache flights list: {e}")
@@ -257,7 +257,7 @@ async def get_flight(flight_id: int, db: Session = Depends(get_db)):
     
     try:
         flight_data = FlightInfoResponse.model_validate(flight).model_dump(mode='json')
-        set_cache(cache_key, json.dumps(flight_data), ttl=FLIGHT_TTL)
+        set_cache(cache_key, json.dumps(flight_data), ex=FLIGHT_TTL)
         print(f"[CACHE SET] Stored flight {flight_id} in Redis with TTL={FLIGHT_TTL}s")
     except Exception as e:
         print(f"[CACHE ERROR] Failed to cache flight {flight_id}: {e}")

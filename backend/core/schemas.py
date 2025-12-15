@@ -21,6 +21,9 @@ class AirportLocationResponse(AirportLocationBase):
     id: int
     created_at: Optional[datetime]
 
+    class Config:
+        from_attributes = True
+
 
 # ============ Vehicle Type Schemas ============
 
@@ -41,6 +44,9 @@ class VehicleTypeResponse(VehicleTypeBase):
     id: int
     created_at: Optional[datetime]
 
+    class Config:
+        from_attributes = True
+
 
 # ============ Menu Schemas ============
 
@@ -56,6 +62,9 @@ class MenuCreate(MenuBase):
 class MenuResponse(MenuBase):
     id: int
     created_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
 
 
 # ============ Airline Schemas ============
@@ -74,6 +83,9 @@ class AirlineResponse(AirlineBase):
     id: int
     created_at: Optional[datetime]
 
+    class Config:
+        from_attributes = True
+
 
 # ============ Pilot Language Schemas ============
 
@@ -84,6 +96,9 @@ class PilotLanguageBase(BaseModel):
 
 class PilotLanguageResponse(PilotLanguageBase):
     id: int
+
+    class Config:
+        from_attributes = True
 
 
 # ============ Flight Crew (Pilot) Schemas ============
@@ -178,6 +193,9 @@ class FlightCrewAssignmentCreate(FlightCrewAssignmentBase):
 class FlightCrewAssignmentResponse(FlightCrewAssignmentBase):
     id: int
     assigned_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
 
 
 # ============ Flight Information Schemas ============

@@ -36,7 +36,7 @@ async def list_cabin_crew(db: Session = Depends(get_db)):
     
     try:
         crew_data = [CabinCrewResponse.model_validate(c).model_dump(mode='json') for c in data]
-        set_cache(CABIN_CREW_LIST_CACHE_KEY, json.dumps(crew_data), ttl=CABIN_CREW_TTL)
+        set_cache(CABIN_CREW_LIST_CACHE_KEY, json.dumps(crew_data), ex=CABIN_CREW_TTL)
         print(f"[CACHE SET] Stored {len(data)} cabin crew in Redis with TTL={CABIN_CREW_TTL}s")
     except Exception as e:
         print(f"[CACHE ERROR] Failed to cache cabin crew: {e}")
@@ -66,7 +66,7 @@ async def get_cabin_crew(crew_id: int, db: Session = Depends(get_db)):
     
     try:
         crew_data = CabinCrewResponse.model_validate(crew).model_dump(mode='json')
-        set_cache(cache_key, json.dumps(crew_data), ttl=CABIN_CREW_TTL)
+        set_cache(cache_key, json.dumps(crew_data), ex=CABIN_CREW_TTL)
         print(f"[CACHE SET] Stored cabin crew {crew_id} in Redis with TTL={CABIN_CREW_TTL}s")
     except Exception as e:
         print(f"[CACHE ERROR] Failed to cache cabin crew {crew_id}: {e}")
@@ -209,7 +209,7 @@ async def get_crew_by_type(attendant_type: str, db: Session = Depends(get_db)):
     
     try:
         crew_data = [CabinCrewResponse.model_validate(c).model_dump(mode='json') for c in crew]
-        set_cache(cache_key, json.dumps(crew_data), ttl=CABIN_CREW_TTL)
+        set_cache(cache_key, json.dumps(crew_data), ex=CABIN_CREW_TTL)
         print(f"[CACHE SET] Stored {len(crew)} cabin crew by type '{attendant_type}' in Redis with TTL={CABIN_CREW_TTL}s")
     except Exception as e:
         print(f"[CACHE ERROR] Failed to cache cabin crew by type: {e}")
@@ -245,7 +245,7 @@ async def get_cabin_crew_by_flight(flight_id: int, db: Session = Depends(get_db)
     
     try:
         crew_data = [CabinCrewResponse.model_validate(c).model_dump(mode='json') for c in cabin_crew]
-        set_cache(cache_key, json.dumps(crew_data), ttl=CABIN_CREW_TTL)
+        set_cache(cache_key, json.dumps(crew_data), ex=CABIN_CREW_TTL)
         print(f"[CACHE SET] Stored {len(cabin_crew)} cabin crew for flight {flight_id} in Redis with TTL={CABIN_CREW_TTL}s")
     except Exception as e:
         print(f"[CACHE ERROR] Failed to cache cabin crew for flight: {e}")

@@ -77,7 +77,6 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Shutting down Flight Roster System API...")
     
-    # Clean up MongoDB connection
     try:
         await run_in_threadpool(close_mongodb_connection)
     except Exception as e:

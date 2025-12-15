@@ -50,7 +50,7 @@ def list_passengers(flight_id: Optional[int] = None, db: Session = Depends(get_d
     
     try:
         passengers_data = [PassengerResponse.model_validate(p).model_dump(mode='json') for p in passengers]
-        set_cache(cache_key, json.dumps(passengers_data), ttl=PASSENGER_TTL)
+        set_cache(cache_key, json.dumps(passengers_data), ex=PASSENGER_TTL)
         print(f"[CACHE SET] Stored {len(passengers)} passengers in Redis with TTL={PASSENGER_TTL}s")
     except Exception as e:
         print(f"[CACHE ERROR] Failed to cache passengers: {e}")
@@ -78,7 +78,7 @@ def get_passenger(passenger_id: int, db: Session = Depends(get_db)):
     
     try:
         passenger_data = PassengerResponse.model_validate(passenger).model_dump(mode='json')
-        set_cache(cache_key, json.dumps(passenger_data), ttl=PASSENGER_TTL)
+        set_cache(cache_key, json.dumps(passenger_data), ex=PASSENGER_TTL)
         print(f"[CACHE SET] Stored passenger {passenger_id} in Redis with TTL={PASSENGER_TTL}s")
     except Exception as e:
         print(f"[CACHE ERROR] Failed to cache passenger {passenger_id}: {e}")
