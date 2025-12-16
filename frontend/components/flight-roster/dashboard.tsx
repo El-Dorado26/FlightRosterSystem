@@ -19,6 +19,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const STORAGE_KEYS = {
   FLIGHTS: 'dashboard_flights',
   SELECTED_FLIGHT_ID: 'dashboard_selected_flight_id',
+  SELECTED_FLIGHT_DATA: 'dashboard_selected_flight_data',
   ACTIVE_VIEW: 'dashboard_active_view',
 };
 
@@ -66,7 +67,22 @@ export default function FlightRosterDashboard() {
           }
           
           const cachedFlightId = sessionStorage.getItem(STORAGE_KEYS.SELECTED_FLIGHT_ID);
-          if (cachedFlightId && cachedFlights) {
+          const cachedFlightData = sessionStorage.getItem(STORAGE_KEYS.SELECTED_FLIGHT_DATA);
+          
+          if (cachedFlightData) {
+            // Immediately restore the cached flight data to avoid empty state
+            const flightData = JSON.parse(cachedFlightData);
+            setSelectedFlight(flightData);
+            
+            // Also update the flight cache
+            setFlightCache(prev => new Map(prev).set(flightData.id, flightData));
+            
+            // Fetch fresh data in background (optional - for up-to-date info)
+            if (cachedFlightId) {
+              const flightId = parseInt(cachedFlightId);
+              fetchFlightDetails(flightId);
+            }
+          } else if (cachedFlightId && cachedFlights) {
             const flightId = parseInt(cachedFlightId);
             const flightsData = JSON.parse(cachedFlights);
             const flight = flightsData.find((f: any) => f.id === flightId);
@@ -170,6 +186,7 @@ export default function FlightRosterDashboard() {
           flightData.cabin_crew = await cabinCrewResponse.json();
         }
       }
+        sessionStorage.setItem(STORAGE_KEYS.SELECTED_FLIGHT_DATA, JSON.stringify(flightData));
       
       if (!flightData.passengers || flightData.passengers.length === 0) {
         const passengersResponse = await fetch(`${API_URL}/passenger/?flight_id=${flightId}`);

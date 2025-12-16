@@ -38,8 +38,8 @@ AIRPORT_CODE_RE = re.compile(r"^[A-Z]{3}$")     # AAA
 # Cache keys / TTL (seconds)
 FLIGHT_LIST_CACHE_KEY = "flights:all"
 FLIGHT_CACHE_KEY_TEMPLATE = "flight:{flight_id}"
-FLIGHT_LIST_TTL = 300
-FLIGHT_TTL = 300
+FLIGHT_LIST_TTL = 1000
+FLIGHT_TTL = 1000
 
 
 def _validate_flight_number(flight_number: str) -> None:

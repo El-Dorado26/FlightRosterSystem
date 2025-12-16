@@ -14,7 +14,7 @@ router = APIRouter()
 PASSENGER_LIST_CACHE_KEY = "passengers:all"
 PASSENGER_CACHE_KEY_TEMPLATE = "passenger:{passenger_id}"
 FLIGHT_PASSENGERS_CACHE_KEY_TEMPLATE = "passengers:flight:{flight_id}"
-PASSENGER_TTL = 300
+PASSENGER_TTL = 1000
 
 
 # Helper Functions

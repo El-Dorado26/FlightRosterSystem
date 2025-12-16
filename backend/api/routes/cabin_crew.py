@@ -15,7 +15,7 @@ CABIN_CREW_LIST_CACHE_KEY = "cabin_crew:all"
 CABIN_CREW_CACHE_KEY_TEMPLATE = "cabin_crew:{crew_id}"
 FLIGHT_CABIN_CREW_CACHE_KEY_TEMPLATE = "cabin_crew:flight:{flight_id}"
 CABIN_CREW_TYPE_CACHE_KEY_TEMPLATE = "cabin_crew:type:{attendant_type}"
-CABIN_CREW_TTL = 300
+CABIN_CREW_TTL = 1000
 
 
 # ============================
