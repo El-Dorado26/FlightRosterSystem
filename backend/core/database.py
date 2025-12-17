@@ -11,7 +11,19 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL environment variable is required")
 
-engine = create_engine(DATABASE_URL, echo=False)
+# Optimize connection pooling for better performance
+engine = create_engine(
+    DATABASE_URL,
+    echo=False,
+    pool_size=10,          # Number of persistent connections
+    max_overflow=20,       # Additional connections when pool is full
+    pool_pre_ping=True,    # Verify connections before using
+    pool_recycle=3600,     # Recycle connections after 1 hour
+    connect_args={
+        "connect_timeout": 10,
+        "options": "-c statement_timeout=30000"  # 30 second query timeout
+    }
+)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

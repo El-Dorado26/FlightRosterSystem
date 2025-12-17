@@ -451,12 +451,7 @@ async def get_flight_crew_assignments(flight_id: int, db: Session = Depends(get_
         FlightCrewAssignment.flight_id == flight_id
     ).all()
     
-    if not crew_members:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No crew assigned to flight {flight_id}"
-        )
-    
+    # Return empty list instead of 404 if no crew assigned
     return crew_members
 
 #Remove a pilot from a flight assignment

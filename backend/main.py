@@ -16,9 +16,10 @@ from api.routes.flight_crew import router as flight_crew_router
 from api.routes.flights import router as flights_router
 from api.routes.passengers import router as passengers_router
 from api.routes.auth import router as auth_router
+from api.routes.roster import router as roster_router
 from core.database import init_database
+from core.mongodb import test_mongodb_connection, close_mongodb_connection
 
-#backend diagnostics
 def setup_logging():
     """Configure logging for the Flight Roster System."""
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -51,9 +52,9 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager
-async def lifespan(app: FastAPI): #Things to do before and after starting the backend
+async def lifespan(app: FastAPI):
     logger.info("Starting Flight Roster System API...")
-    await run_in_threadpool(init_database) #Connect to the database
+    await run_in_threadpool(init_database)
     logger.info("Database initialized successfully!")
 
     try:
@@ -62,9 +63,24 @@ async def lifespan(app: FastAPI): #Things to do before and after starting the ba
     except Exception as e:
         logger.warning(f"Redis connection warning: {e}")
     
+    # Test MongoDB connection
+    try:
+        mongodb_connected = await run_in_threadpool(test_mongodb_connection)
+        if mongodb_connected:
+            logger.info("✓ MongoDB (NoSQL) is ready for roster storage!")
+        else:
+            logger.warning("⚠ MongoDB connection failed - NoSQL roster storage unavailable")
+    except Exception as e:
+        logger.warning(f"MongoDB connection error: {e}")
+    
     logger.info("Flight Roster System API is ready to serve requests!")
     yield
     logger.info("Shutting down Flight Roster System API...")
+    
+    try:
+        await run_in_threadpool(close_mongodb_connection)
+    except Exception as e:
+        logger.error(f"Error closing MongoDB connection: {e}")
 
 app = FastAPI(
     title="Flight Roster System API",
@@ -72,7 +88,6 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
-#Frontend (ReactJS) to talk to with the Backend (FastAPI).
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -81,20 +96,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-#Connected each API to the main backend.
-# Once all endpoints are complete, these routers will be pluged directly into the main backend.
-#Endpoints for each API: a specific URL that performs one action in the API.
 app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 app.include_router(flights_router, prefix="/flight-info", tags=["Flights"])
 app.include_router(flight_crew_router, prefix="/flight-crew", tags=["Flight Crew"])
 app.include_router(cabin_router, prefix="/cabin-crew", tags=["Cabin Crew"])
 app.include_router(passengers_router, prefix="/passenger", tags=["Passengers"])
+app.include_router(roster_router, prefix="/roster", tags=["Roster"])
 
 @app.get("/")
 async def root():
     return {"message": "Welcome to Flight Roster System API", "version": "1.0.0"}
 
-# Redis health check endpoint
 @app.get("/redis-health")
 async def redis_health():
     """Check Redis connection status."""
@@ -113,10 +125,16 @@ async def redis_health():
             "error": str(e)
         }
     
-# check if the backend running
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
-#Starts the server 
+
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        reload_dirs=[".", "api", "core"],
+        log_level="info"
+    )

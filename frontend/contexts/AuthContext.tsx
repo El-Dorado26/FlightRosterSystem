@@ -23,13 +23,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const loadUser = async () => {
       try {
+        // First try to get user from localStorage (instant)
+        const cachedUser = authService.getUser();
+        if (cachedUser) {
+          setUser(cachedUser);
+          setLoading(false);
+        }
+        
         if (authService.isAuthenticated()) {
-          const userData = await authService.getCurrentUser();
-          setUser(userData);
+          try {
+            const userData = await authService.getCurrentUser();
+            setUser(userData);
+          } catch (error) {
+            console.error('Failed to verify user with server:', error);
+            if (!cachedUser) {
+              authService.logout();
+            }
+          }
+        } else if (!cachedUser) {
+          setUser(null);
         }
       } catch (error) {
         console.error('Failed to load user:', error);
         authService.logout();
+        setUser(null);
       } finally {
         setLoading(false);
       }
