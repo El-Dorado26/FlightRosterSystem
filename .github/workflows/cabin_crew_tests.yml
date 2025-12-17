@@ -19,7 +19,7 @@ jobs:
       # 2️⃣ Setup Python
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.11'  # or whichever version you use
+          python-version: '3.11'
 
       # 3️⃣ Install dependencies (if you have requirements.txt)
       - run: |
@@ -28,4 +28,4 @@ jobs:
 
       # 4️⃣ Run cabin crew API tests
       - name: Run cabin crew API tests
-        run: pytest test_roster_utils.py -v
+        run: pytest backend/tests/test_roster_utils.py -v
