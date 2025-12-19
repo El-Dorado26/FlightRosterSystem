@@ -37,12 +37,10 @@ def list_passengers(flight_id: Optional[int] = None, db: Session = Depends(get_d
     try:
         cached = get_cache(cache_key)
         if cached:
-            print(f"[CACHE HIT] Retrieved passengers from Redis (flight_id={flight_id})")
             return json.loads(cached)
     except Exception as e:
         print(f"[CACHE ERROR] Failed to retrieve passengers from cache: {e}")
     
-    print(f"[CACHE MISS] Querying database for passengers (flight_id={flight_id})")
     query = db.query(Passenger)
     if flight_id:
         query = query.filter(Passenger.flight_id == flight_id)
@@ -51,7 +49,6 @@ def list_passengers(flight_id: Optional[int] = None, db: Session = Depends(get_d
     try:
         passengers_data = [PassengerResponse.model_validate(p).model_dump(mode='json') for p in passengers]
         set_cache(cache_key, json.dumps(passengers_data), ex=PASSENGER_TTL)
-        print(f"[CACHE SET] Stored {len(passengers)} passengers in Redis with TTL={PASSENGER_TTL}s")
     except Exception as e:
         print(f"[CACHE ERROR] Failed to cache passengers: {e}")
     
@@ -66,12 +63,10 @@ def get_passenger(passenger_id: int, db: Session = Depends(get_db)):
     try:
         cached = get_cache(cache_key)
         if cached:
-            print(f"[CACHE HIT] Retrieved passenger {passenger_id} from Redis")
             return json.loads(cached)
     except Exception as e:
         print(f"[CACHE ERROR] Failed to retrieve passenger {passenger_id} from cache: {e}")
     
-    print(f"[CACHE MISS] Querying database for passenger {passenger_id}")
     passenger = db.query(Passenger).filter(Passenger.id == passenger_id).first()
     if not passenger:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Passenger not found")
@@ -79,7 +74,6 @@ def get_passenger(passenger_id: int, db: Session = Depends(get_db)):
     try:
         passenger_data = PassengerResponse.model_validate(passenger).model_dump(mode='json')
         set_cache(cache_key, json.dumps(passenger_data), ex=PASSENGER_TTL)
-        print(f"[CACHE SET] Stored passenger {passenger_id} in Redis with TTL={PASSENGER_TTL}s")
     except Exception as e:
         print(f"[CACHE ERROR] Failed to cache passenger {passenger_id}: {e}")
     
@@ -89,12 +83,12 @@ def get_passenger(passenger_id: int, db: Session = Depends(get_db)):
 @router.post("/", response_model=PassengerResponse, status_code=status.HTTP_201_CREATED)
 def create_passenger(
     passenger: PassengerCreate,
-    flight_id: int,
-    seat_number: str,
-    parent_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
-    """Create a new passenger with optional parent-child booking."""
+    """Create a new passenger with data from PassengerCreate schema."""
+    flight_id = passenger.flight_id
+    seat_number = passenger.seat_number
+
     # Seat validation
     if not check_seat_availability(db, flight_id, seat_number):
         raise HTTPException(
@@ -103,12 +97,12 @@ def create_passenger(
         )
 
     # Parent validation
-    if parent_id:
-        parent = db.query(Passenger).filter(Passenger.id == parent_id).first()
+    if passenger.parent_id:
+        parent = db.query(Passenger).filter(Passenger.id == passenger.parent_id).first()
         if not parent:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Parent passenger {parent_id} not found"
+                detail=f"Parent passenger {passenger.parent_id} not found"
             )
         if parent.flight_id != flight_id:
             raise HTTPException(
@@ -116,15 +110,8 @@ def create_passenger(
                 detail="Parent and child must be on the same flight"
             )
 
-    new_passenger = Passenger(
-        name=passenger.name,
-        email=passenger.email,
-        phone=passenger.phone,
-        passport_number=passenger.passport_number,
-        flight_id=flight_id,
-        seat_number=seat_number,
-        parent_id=parent_id
-    )
+    new_passenger = Passenger(**passenger.model_dump())
+    
     db.add(new_passenger)
     db.commit()
     db.refresh(new_passenger)
@@ -159,8 +146,8 @@ def update_passenger(
             )
         existing_passenger.seat_number = seat_number
 
-    # Update other fields
-    for field, value in passenger.dict(exclude_unset=True).items():
+    update_data = passenger.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
         setattr(existing_passenger, field, value)
 
     db.commit()
@@ -210,9 +197,7 @@ def export_passengers_json(flight_id: Optional[int] = None, db: Session = Depend
         query = query.filter(Passenger.flight_id == flight_id)
     passengers = query.all()
 
-    # Convert to list of dicts
     passenger_list = [p.__dict__.copy() for p in passengers]
-    # Remove SQLAlchemy internal key
     for p in passenger_list:
         p.pop("_sa_instance_state", None)
 
@@ -232,7 +217,7 @@ def export_passengers_csv(flight_id: Optional[int] = None, db: Session = Depends
 
     for p in passengers:
         row = p.__dict__.copy()
-        row.pop("_sa_instance_state", None)  # remove internal SQLAlchemy field
+        row.pop("_sa_instance_state", None)
 
         if writer is None:
             writer = csv.DictWriter(output, fieldnames=row.keys())
