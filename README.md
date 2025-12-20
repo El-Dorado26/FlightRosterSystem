@@ -8,6 +8,7 @@ A comprehensive flight management system for managing flights, crews, passengers
 - [Technology Stack](#technology-stack)
 - [Project Structure](#project-structure)
 - [API Documentation](#api-documentation)
+- [Testing](#testing)
 - [Getting Started](#getting-started)
 
 ---
@@ -47,8 +48,9 @@ A comprehensive flight management system for managing flights, crews, passengers
 - **Type Safety**: TypeScript
 
 ### DevOps & Testing
-- **Testing**: pytest with asyncio support
-- **Code Coverage**: pytest-cov
+- **Backend Testing**: pytest with asyncio support
+- **Frontend Testing**: Jest + React Testing Library
+- **Code Coverage**: pytest-cov (backend), Jest coverage (frontend)
 - **Browser Automation**: Selenium
 - **HTTP Client**: httpx
 - **Containerization**: Docker
@@ -738,6 +740,87 @@ Check Redis connection status.
   "test_value": "ok"
 }
 ```
+
+---
+
+## Testing
+
+### Backend Tests
+
+The backend includes comprehensive test coverage with pytest:
+
+**Test Files:**
+- `test_auth.py` - Authentication and JWT tests
+- `test_flights_api.py` - Flight management tests
+- `test_flight_crew_api.py` - Flight crew tests
+- `test_cabin_crew_api.py` - Cabin crew tests
+- `test_passengers_api.py` - Passenger management tests
+- `test_roster_utils.py` - Roster generation logic tests
+- `test_redis.py` - Redis caching tests
+- `test_equivalence_bva.py` - Equivalence and boundary value tests
+- `test_performance.py` - Performance benchmarking
+- `test_load_stress.py` - Load and stress testing
+- `test_security.py` - Security vulnerability tests
+- `test_selenium_ui.py` - UI automation tests
+
+**Running Backend Tests:**
+```bash
+cd backend
+
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=. --cov-report=html
+
+# Run specific test file
+pytest tests/test_auth.py
+
+# Run with verbose output
+pytest -v
+```
+
+### Frontend Tests
+
+The frontend includes comprehensive tests using Jest and React Testing Library:
+
+**Test Files:**
+- `test_AuthContext.test.tsx` - Authentication context and state management (8 tests)
+- `test_RoleGuard.test.tsx` - Role-based access control components (9 tests)
+- `test_Dashboard.test.tsx` - Dashboard functionality (15 tests)
+
+**Running Frontend Tests:**
+```bash
+cd frontend
+
+# Install dependencies first
+npm install
+
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run with coverage
+npm run test:coverage
+
+# Using the test script
+./run_frontend_tests.sh all          # All tests
+./run_frontend_tests.sh auth         # AuthContext tests only
+./run_frontend_tests.sh guard        # RoleGuard tests only
+./run_frontend_tests.sh dashboard    # Dashboard tests only
+./run_frontend_tests.sh coverage     # With coverage report
+```
+
+**Test Coverage:**
+- **Total Frontend Tests**: 32 test cases
+- **Coverage Goals**: >80% statements, >75% branches, >85% functions
+
+**Documentation:**
+- See `frontend/QUICK_START_TESTING.md` for quick setup guide
+- See `frontend/TESTING.md` for detailed testing documentation
+- See `frontend/__tests__/README.md` for test file descriptions
 
 ---
 
