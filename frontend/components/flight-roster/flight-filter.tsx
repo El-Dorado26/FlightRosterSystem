@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Search, X } from "lucide-react";
-import { Flight, mockAirports, mockAirlines } from "@/lib/mock-data";
+import { Flight } from "@/lib/types";
 
 interface FlightFilterProps {
   flights: Flight[];
@@ -19,6 +19,19 @@ export function FlightFilter({ flights, onFilter }: FlightFilterProps) {
   const [departureAirport, setDepartureAirport] = useState<string>("all");
   const [arrivalAirport, setArrivalAirport] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
+
+  const uniqueAirlines = Array.from(
+    new Map(flights.map(f => [f.airline.airline_code, f.airline])).values()
+  );
+
+  const uniqueAirports = Array.from(
+    new Map(
+      [
+        ...flights.map(f => [f.departure_airport.airport_code, f.departure_airport] as const),
+        ...flights.map(f => [f.arrival_airport.airport_code, f.arrival_airport] as const)
+      ]
+    ).values()
+  );
 
   const handleFilter = () => {
     let filtered = [...flights];
@@ -84,7 +97,7 @@ export function FlightFilter({ flights, onFilter }: FlightFilterProps) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Airlines</SelectItem>
-              {mockAirlines.map((airline) => (
+              {uniqueAirlines.map((airline) => (
                 <SelectItem key={airline.id} value={airline.airline_code}>
                   {airline.airline_name} ({airline.airline_code})
                 </SelectItem>
@@ -101,7 +114,7 @@ export function FlightFilter({ flights, onFilter }: FlightFilterProps) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Airports</SelectItem>
-              {mockAirports.map((airport) => (
+              {uniqueAirports.map((airport) => (
                 <SelectItem key={airport.id} value={airport.airport_code}>
                   {airport.airport_code} - {airport.city}
                 </SelectItem>
@@ -118,8 +131,8 @@ export function FlightFilter({ flights, onFilter }: FlightFilterProps) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Airports</SelectItem>
-              {mockAirports.map((airport) => (
-                <SelectItem key={airport.id} value={airport.airport_code}>
+              {uniqueAirports.map((airport) => (
+                <SelectItem key={`arr-${airport.id}`} value={airport.airport_code}>
                   {airport.airport_code} - {airport.city}
                 </SelectItem>
               ))}

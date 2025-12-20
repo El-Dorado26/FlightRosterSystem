@@ -1,6 +1,6 @@
 "use client";
 
-import { Flight } from "@/lib/mock-data";
+import { Flight } from "@/lib/types";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

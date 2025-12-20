@@ -235,9 +235,6 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
                       <input type="checkbox" className="rounded" />
                       <span className="text-gray-600">Remember me</span>
                     </label>
-                    <a href="#" className="text-blue-600 hover:underline">
-                      Forgot password?
-                    </a>
                   </div>
 
                   <Button type="submit" className="w-full" size="lg">
@@ -296,7 +293,29 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
                       >
                         User
                       </Button>
+                      <Button
+                        type="button"
+                        variant={signupRole === "manager" ? "default" : "outline"}
+                        onClick={() => setSignupRole("manager")}
+                        className="w-full"
+                      >
+                        Manager
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={signupRole === "admin" ? "default" : "outline"}
+                        onClick={() => setSignupRole("admin")}
+                        className="w-full"
+                      >
+                        Admin
+                      </Button>
                     </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      <span className="font-semibold">Viewer:</span> View-only access • 
+                      <span className="font-semibold"> User:</span> Basic operations • 
+                      <span className="font-semibold"> Manager:</span> Advanced operations • 
+                      <span className="font-semibold"> Admin:</span> Full system access
+                    </p>
                   </div>
 
                   <div className="space-y-2">

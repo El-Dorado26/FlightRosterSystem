@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Flight } from "@/lib/mock-data";
+import { Flight } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -149,7 +149,12 @@ export function FlightSelector({ flights, selectedFlight, onFlightSelect, isLoad
             <div className="flex items-start gap-2">
               <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground" />
               <div className="flex-1 text-sm">
-                <div className="font-medium">{selectedFlight.departure_airport.airport_name}</div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{selectedFlight.departure_airport.airport_name}</span>
+                  <Badge variant="outline" className="text-xs font-mono">
+                    {selectedFlight.departure_airport.airport_code}
+                  </Badge>
+                </div>
                 <div className="text-muted-foreground">
                   {selectedFlight.departure_airport.city}, {selectedFlight.departure_airport.country}
                 </div>
@@ -159,7 +164,12 @@ export function FlightSelector({ flights, selectedFlight, onFlightSelect, isLoad
             <div className="flex items-start gap-2">
               <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground" />
               <div className="flex-1 text-sm">
-                <div className="font-medium">{selectedFlight.arrival_airport.airport_name}</div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{selectedFlight.arrival_airport.airport_name}</span>
+                  <Badge variant="outline" className="text-xs font-mono">
+                    {selectedFlight.arrival_airport.airport_code}
+                  </Badge>
+                </div>
                 <div className="text-muted-foreground">
                   {selectedFlight.arrival_airport.city}, {selectedFlight.arrival_airport.country}
                 </div>

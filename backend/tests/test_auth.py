@@ -9,10 +9,10 @@ Testing Strategy:
 """
 import pytest
 from datetime import datetime, timedelta
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
-from jose import jwt, JWTError
+from jose import jwt
 
 from core.auth import (
     verify_password,

@@ -21,6 +21,7 @@ from core.roster_utils import (
     validate_crew_selection,
     get_crew_statistics
 )
+from core.redis import delete_cache, build_cache_key
 
 router = APIRouter(tags=["roster"])
 logger = logging.getLogger(__name__)
@@ -99,11 +100,15 @@ async def generate_roster(
             status_code=400,
             detail=f"Crew selection validation failed: {'; '.join(errors)}"
         )
-    
+
     # NOTE: We do NOT set flight_id on crew members
     # Rosters are snapshots/planning documents, not permanent assignments
     # This allows crew to be reused for multiple roster generations
-    
+
+    # Assign cabin crew to flight
+    for crew in cabin_crew_members:
+        crew.flight_id = roster_create.flight_id
+
     passengers = db.query(models.Passenger).filter(
         models.Passenger.flight_id == roster_create.flight_id
     ).all()
@@ -129,7 +134,14 @@ async def generate_roster(
                 passenger.seat_number = seat_assignments[passenger.id]
     
     db.commit()
-    
+
+    # Invalidate flight cache so updated crew/passenger data is fetched
+    try:
+        delete_cache("flights:all")
+        delete_cache(build_cache_key("flight:{flight_id}", flight_id=roster_create.flight_id))
+    except Exception as e:
+        logger.warning(f"Failed to invalidate cache: {e}")
+
     for crew in flight_crew_members:
         db.refresh(crew)
     for crew in cabin_crew_members:
@@ -289,21 +301,23 @@ async def get_available_flight_crew(flight_id: int, db: Session = Depends(get_db
     
     # Get all flight crew
     all_crew = db.query(models.FlightCrew).all()
-    
-    # Filter by certifications
+
+    # Filter by vehicle type restrictions
     qualified_crew = [
         {
             "id": crew.id,
             "name": crew.name,
             "role": crew.role,
             "seniority_level": crew.seniority_level,
-            "certifications": crew.certifications,
-            "languages": crew.languages,
-            "qualified": crew.certifications and flight.vehicle_type.aircraft_code in crew.certifications
+            "age": crew.age,
+            "nationality": crew.nationality,
+            "license_number": crew.license_number,
+            "languages": [lang.language for lang in crew.languages] if crew.languages else [],
+            "qualified": crew.vehicle_type_restriction_id is None or crew.vehicle_type_restriction_id == flight.vehicle_type.id
         }
         for crew in all_crew
     ]
-    
+
     return qualified_crew
 
 

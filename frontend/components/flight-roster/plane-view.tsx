@@ -13,15 +13,25 @@ export function PlaneView({ flight }: PlaneViewProps) {
   const [hoveredSeat, setHoveredSeat] = useState<string | null>(null);
 
   const vehicleType = flight.vehicle_type || {};
-  const seatingPlan = vehicleType.seating_plan || { rows: 30, seats_per_row: 6, business: 24, economy: 156 };
+  const seatingPlan = vehicleType.seating_plan || { rows: 30, seats_per_row: 10, business: 40, economy: 260 };
   const rows = seatingPlan.rows || 30;
-  const seatsPerRow = seatingPlan.seats_per_row || 6;
+  const seatsPerRow = seatingPlan.seats_per_row || 10;
+
+  console.log('Vehicle type:', vehicleType);
+  console.log('Seating plan:', seatingPlan);
 
   const seatMap = new Map<string, any>();
 
   const flightCrew = flight.flight_crew || [];
   const cabinCrew = flight.cabin_crew || [];
   const passengers = flight.passengers || [];
+
+  console.log('=== PLANE VIEW DEBUG ===');
+  console.log('Total passengers:', passengers.length);
+  console.log('Flight Crew:', flightCrew.map((c: any) => ({ name: c.name, seat: c.seat_number })));
+  console.log('Cabin Crew:', cabinCrew.map((c: any) => ({ name: c.name, seat: c.seat_number })));
+  console.log('Passengers:', passengers.map((p: any) => ({ name: p.name, seat: p.seat_number })));
+  console.log('First 5 passengers full data:', passengers.slice(0, 5));
 
   flightCrew.forEach((crew: any) => {
     if (crew.seat_number) {
@@ -41,12 +51,30 @@ export function PlaneView({ flight }: PlaneViewProps) {
     }
   });
 
-  // Generate seat grid
-  const businessRows = Math.ceil(seatingPlan.business / 6); // Assuming 6 seats per business row
-  const economyRows = rows - businessRows;
+  console.log('SeatMap contents:', Array.from(seatMap.entries()));
+  console.log('SeatMap size:', seatMap.size);
+
+  // Handle different seating plan structures
+  let businessRows = 0;
+  let economyRows = 0;
+
+  if (seatingPlan.business_rows && Array.isArray(seatingPlan.business_rows)) {
+    // New structure with business_rows and economy_rows arrays
+    businessRows = seatingPlan.business_rows.length;
+    economyRows = seatingPlan.economy_rows?.length || 0;
+  } else if (seatingPlan.business && seatingPlan.economy) {
+    // Old structure with business/economy seat counts
+    businessRows = Math.ceil(seatingPlan.business / seatsPerRow);
+    economyRows = rows - businessRows;
+  }
+
+  console.log('Plane configuration:', { rows, seatsPerRow, businessRows, economyRows });
+  console.log('Sample seat labels that will be generated:');
+  console.log('Row 1:', Array.from({ length: 6 }, (_, i) => `1${["A", "B", "C", "D", "E", "F"][i]}`));
+  console.log('Row 2:', Array.from({ length: 6 }, (_, i) => `2${["A", "B", "C", "D", "E", "F"][i]}`));
 
   const generateSeatLabel = (row: number, seat: number): string => {
-    const seatLetters = ["A", "B", "C", "D", "E", "F", "G", "H", "I"];
+    const seatLetters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"];
     return `${row}${seatLetters[seat]}`;
   };
 
@@ -65,17 +93,25 @@ export function PlaneView({ flight }: PlaneViewProps) {
   const renderSeatRow = (rowNumber: number, seatsInRow: number) => {
     const seats = [];
     const seatClass = getSeatClass(rowNumber);
+    let renderedSeatsCount = 0;
 
     for (let i = 0; i < seatsInRow; i++) {
       const seatLabel = generateSeatLabel(rowNumber, i);
       const person = seatMap.get(seatLabel);
 
-      // Add aisle space
-      if (i === Math.floor(seatsInRow / 2)) {
+      // Skip crew seats - they're already shown in the crew area
+      if (person && (person.type === "Flight Crew" || person.type === "Cabin Crew")) {
+        continue;
+      }
+
+      // Add aisle space after half of the seats
+      if (renderedSeatsCount === Math.floor(seatsInRow / 2)) {
         seats.push(
           <div key={`aisle-${rowNumber}-${i}`} className="w-6"></div>
         );
       }
+
+      renderedSeatsCount++;
 
       seats.push(
         <div
@@ -88,7 +124,7 @@ export function PlaneView({ flight }: PlaneViewProps) {
             {seatLabel}
           </div>
           {hoveredSeat === seatLabel && person && (
-            <div className="absolute z-50 left-1/2 transform -translate-x-1/2 bottom-full mb-2 bg-white border-2 border-gray-300 rounded-lg shadow-lg p-3 w-64 pointer-events-none">
+            <div className="absolute z-50 left-0 bottom-full mb-2 bg-white border-2 border-gray-300 rounded-lg shadow-lg p-3 w-64 pointer-events-none">
               <div className="text-sm">
                 <div className="font-semibold text-gray-900">{person.name}</div>
                 <div className="text-gray-600 mt-1">
@@ -171,7 +207,7 @@ export function PlaneView({ flight }: PlaneViewProps) {
                   >
                     <span className="text-xs font-semibold">{seatLabel}</span>
                     {hoveredSeat === seatLabel && (
-                      <div className="absolute z-50 left-1/2 transform -translate-x-1/2 bottom-full mb-2 bg-white border-2 border-gray-300 rounded-lg shadow-lg p-3 w-64 pointer-events-none">
+                      <div className="absolute z-50 left-0 top-full mt-2 bg-white border-2 border-gray-300 rounded-lg shadow-lg p-3 w-64 pointer-events-none">
                         <div className="text-sm">
                           <div className="font-semibold text-gray-900">{person.name}</div>
                           <div className="text-gray-600 mt-1">
@@ -194,16 +230,15 @@ export function PlaneView({ flight }: PlaneViewProps) {
             <div className="mb-4 border-b pb-4">
               <div className="text-xs font-semibold text-gray-600 mb-2">BUSINESS CLASS</div>
               {Array.from({ length: businessRows }, (_, i) => i + 1).map((row) =>
-                renderSeatRow(row, Math.min(6, seatsPerRow))
+                renderSeatRow(row, 6)
               )}
             </div>
           )}
 
-          {/* Economy Class - Showing first 10 rows as sample */}
           <div>
             <div className="text-xs font-semibold text-gray-600 mb-2">ECONOMY CLASS</div>
-            {Array.from({ length: Math.min(10, economyRows) }, (_, i) => i + businessRows + 1).map((row) =>
-              renderSeatRow(row, seatsPerRow)
+            {Array.from({ length: economyRows }, (_, i) => i + businessRows + 1).map((row) =>
+              renderSeatRow(row, 6)
             )}
             {economyRows > 10 && (
               <div className="text-center text-sm text-gray-500 mt-2">

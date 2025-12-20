@@ -61,7 +61,7 @@ export function DashboardHeader() {
                     </div>
                     <div className="text-left">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-gray-900">{user.name || user.email}</span>
+                        <span className="text-sm font-semibold text-gray-900">{user.email}</span>
                         <Badge variant={getRoleBadgeVariant(user.role)} className="flex items-center gap-1">
                           {getRoleIcon(user.role)}
                           {user.role}

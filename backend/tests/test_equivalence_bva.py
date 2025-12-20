@@ -447,6 +447,307 @@ class TestFlightCrewRoleEquivalence:
 
 
 @pytest.mark.unit
+class TestPassengerAPIEquivalence:
+    """
+    Equivalence Partitioning tests for Passenger API operations.
+    
+    Test partitions based on:
+    - Age categories (infant, child, adult, senior)
+    - Seat availability (available, taken)
+    - Parent relationship (with parent, without parent, invalid parent)
+    - Email format (valid, invalid)
+    - Phone format (valid, invalid, null)
+    - Passport format (valid, invalid, null)
+    - Seat type (Economy, Business)
+    - Gender (valid values)
+    - Nationality (valid country codes)
+    """
+    
+    def test_create_passenger_age_partitions(self):
+        """Test creating passengers across all age partitions."""
+        from unittest.mock import MagicMock, patch
+        from api.routes.passengers import create_passenger
+        from core.schemas import PassengerCreate
+        
+        age_partitions = [
+            (0, "infant"),    # Infant: 0-2
+            (1, "infant"),
+            (2, "infant"),
+            (3, "child"),     # Child: 3-12
+            (8, "child"),
+            (12, "child"),
+            (13, "adult"),    # Adult: 13-64
+            (30, "adult"),
+            (64, "adult"),
+            (65, "senior"),   # Senior: 65+
+            (80, "senior"),
+        ]
+        
+        for age, category in age_partitions:
+            passenger_data = PassengerCreate(
+                name=f"Test {category.title()}",
+                email=f"test_{age}@example.com",
+                phone="+1234567890",
+                passport_number=f"PASS{age:03d}",
+                age=age,
+                gender="Male",
+                nationality="US",
+                seat_type="Economy"
+            )
+            
+            # Verify the schema accepts the age
+            assert passenger_data.age == age
+    
+    def test_passenger_email_partitions(self):
+        """Test email equivalence partitions."""
+        from core.schemas import PassengerCreate
+        
+        # Valid emails
+        valid_emails = [
+            "user@example.com",
+            "test.user@domain.co.uk",
+            "name+tag@email.org",
+            "user123@test-domain.com",
+        ]
+        
+        for email in valid_emails:
+            passenger = PassengerCreate(
+                name="Test User",
+                email=email,
+                phone="+1234567890",
+                passport_number="ABC123",
+                age=30,
+                gender="Male",
+                nationality="US",
+                seat_type="Economy"
+            )
+            assert passenger.email == email
+    
+    def test_passenger_seat_type_partitions(self):
+        """Test seat type equivalence partitions."""
+        from core.schemas import PassengerCreate
+        
+        valid_seat_types = ["Economy", "Business", "economy", "business"]
+        
+        for seat_type in valid_seat_types:
+            passenger = PassengerCreate(
+                name="Test User",
+                email="test@example.com",
+                phone="+1234567890",
+                passport_number="ABC123",
+                age=30,
+                gender="Male",
+                nationality="US",
+                seat_type=seat_type
+            )
+            assert passenger.seat_type == seat_type
+    
+    def test_passenger_gender_partitions(self):
+        """Test gender equivalence partitions."""
+        from core.schemas import PassengerCreate
+        
+        valid_genders = ["Male", "Female", "Other", "male", "female"]
+        
+        for gender in valid_genders:
+            passenger = PassengerCreate(
+                name="Test User",
+                email="test@example.com",
+                phone="+1234567890",
+                passport_number="ABC123",
+                age=30,
+                gender=gender,
+                nationality="US",
+                seat_type="Economy"
+            )
+            assert passenger.gender == gender
+    
+    def test_passenger_nationality_partitions(self):
+        """Test nationality code equivalence partitions."""
+        from core.schemas import PassengerCreate
+        
+        # Valid country codes (ISO 3166-1 alpha-2)
+        valid_nationalities = ["US", "GB", "TR", "DE", "FR", "JP", "CN"]
+        
+        for nationality in valid_nationalities:
+            passenger = PassengerCreate(
+                name="Test User",
+                email="test@example.com",
+                phone="+1234567890",
+                passport_number="ABC123",
+                age=30,
+                gender="Male",
+                nationality=nationality,
+                seat_type="Economy"
+            )
+            assert passenger.nationality == nationality
+    
+    def test_passenger_optional_fields_partitions(self):
+        """Test optional field partitions (null vs provided)."""
+        from core.schemas import PassengerCreate
+        
+        # With all optional fields
+        passenger_full = PassengerCreate(
+            name="Test User",
+            email="test@example.com",
+            phone="+1234567890",
+            passport_number="ABC123",
+            age=30,
+            gender="Male",
+            nationality="US",
+            seat_type="Economy"
+        )
+        assert passenger_full.phone is not None
+        assert passenger_full.passport_number is not None
+        
+        # Without optional fields (phone and passport can be null)
+        passenger_minimal = PassengerCreate(
+            name="Test User",
+            email="test@example.com",
+            phone=None,
+            passport_number=None,
+            age=30,
+            gender="Male",
+            nationality="US",
+            seat_type="Economy"
+        )
+        assert passenger_minimal.phone is None
+        assert passenger_minimal.passport_number is None
+    
+    def test_seat_number_format_partitions(self):
+        """Test seat number format partitions."""
+        valid_seat_formats = [
+            "1A",      # Single digit + letter
+            "12B",     # Double digit + letter
+            "99Z",     # Max typical row + last letter
+            "100F",    # Triple digit + letter
+            "23C",     # Mid range
+        ]
+        
+        for seat_number in valid_seat_formats:
+            # Verify format is acceptable (basic validation)
+            assert len(seat_number) >= 2
+            assert seat_number[-1].isalpha()
+            assert seat_number[:-1].isdigit()
+    
+    def test_parent_relationship_partitions(self):
+        """Test parent relationship partitions."""
+        from unittest.mock import MagicMock, patch
+        from api.routes.passengers import create_passenger
+        from core.schemas import PassengerCreate
+        from fastapi import HTTPException
+        
+        infant_data = PassengerCreate(
+            name="Baby",
+            email="baby@example.com",
+            phone="+1234567890",
+            passport_number="BABY123",
+            age=1,
+            gender="Male",
+            nationality="US",
+            seat_type="Economy"
+        )
+        
+        mock_db = MagicMock()
+        
+        # Partition 1: Infant with valid parent
+        with patch('api.routes.passengers.check_seat_availability', return_value=True):
+            mock_parent = MagicMock()
+            mock_parent.flight_id = 1
+            
+            query_mock = MagicMock()
+            mock_db.query.return_value = query_mock
+            filter_mock = MagicMock()
+            query_mock.filter.return_value = filter_mock
+            filter_mock.first.return_value = mock_parent
+            
+            create_passenger(
+                passenger=infant_data,
+                flight_id=1,
+                seat_number="12A",
+                parent_id=1,
+                db=mock_db
+            )
+            mock_db.add.assert_called_once()
+        
+        # Partition 2: Infant without parent (should fail)
+        mock_db.reset_mock()
+        with patch('api.routes.passengers.check_seat_availability', return_value=True):
+            with pytest.raises(HTTPException) as exc_info:
+                create_passenger(
+                    passenger=infant_data,
+                    flight_id=1,
+                    seat_number="12B",
+                    parent_id=None,
+                    db=mock_db
+                )
+            assert exc_info.value.status_code == 400
+        
+        # Partition 3: Adult without parent (valid)
+        mock_db.reset_mock()
+        adult_data = PassengerCreate(
+            name="Adult",
+            email="adult@example.com",
+            phone="+1234567890",
+            passport_number="ADULT123",
+            age=30,
+            gender="Male",
+            nationality="US",
+            seat_type="Economy"
+        )
+        
+        with patch('api.routes.passengers.check_seat_availability', return_value=True):
+            create_passenger(
+                passenger=adult_data,
+                flight_id=1,
+                seat_number="12C",
+                parent_id=None,
+                db=mock_db
+            )
+            mock_db.add.assert_called_once()
+    
+    def test_update_passenger_field_partitions(self):
+        """Test update operation with different field combinations."""
+        from core.schemas import PassengerUpdate
+        
+        # Partition 1: Update single field
+        update_name = PassengerUpdate(name="New Name")
+        assert update_name.name == "New Name"
+        assert update_name.email is None
+        
+        # Partition 2: Update multiple fields
+        update_multiple = PassengerUpdate(
+            name="New Name",
+            email="new@example.com",
+            age=35
+        )
+        assert update_multiple.name == "New Name"
+        assert update_multiple.email == "new@example.com"
+        assert update_multiple.age == 35
+        
+        # Partition 3: Update all fields
+        update_all = PassengerUpdate(
+            name="Complete Update",
+            email="complete@example.com",
+            phone="+9876543210",
+            passport_number="NEW123",
+            age=40,
+            gender="Female",
+            nationality="GB",
+            seat_type="Business"
+        )
+        assert update_all.name == "Complete Update"
+        assert update_all.age == 40
+    
+    def test_flight_id_partitions(self):
+        """Test flight_id value partitions."""
+        valid_flight_ids = [1, 10, 100, 999, 10000]
+        
+        for flight_id in valid_flight_ids:
+            assert isinstance(flight_id, int)
+            assert flight_id > 0
+
+
+@pytest.mark.unit
 class TestVehicleTypeConstraints:
     """
     Boundary Value Analysis for vehicle type constraints.

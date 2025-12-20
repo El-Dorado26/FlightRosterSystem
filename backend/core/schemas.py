@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Union
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
 
 # ============ Airport Location Schemas ============
@@ -18,11 +18,10 @@ class AirportLocationCreate(AirportLocationBase):
 
 
 class AirportLocationResponse(AirportLocationBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     created_at: Optional[datetime]
-
-    class Config:
-        from_attributes = True
 
 
 # ============ Vehicle Type Schemas ============
@@ -41,11 +40,10 @@ class VehicleTypeCreate(VehicleTypeBase):
 
 
 class VehicleTypeResponse(VehicleTypeBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     created_at: Optional[datetime]
-
-    class Config:
-        from_attributes = True
 
 
 # ============ Menu Schemas ============
@@ -60,11 +58,10 @@ class MenuCreate(MenuBase):
 
 
 class MenuResponse(MenuBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     created_at: Optional[datetime]
-
-    class Config:
-        from_attributes = True
 
 
 # ============ Airline Schemas ============
@@ -80,11 +77,10 @@ class AirlineCreate(AirlineBase):
 
 
 class AirlineResponse(AirlineBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     created_at: Optional[datetime]
-
-    class Config:
-        from_attributes = True
 
 
 # ============ Pilot Language Schemas ============
@@ -95,10 +91,9 @@ class PilotLanguageBase(BaseModel):
 
 
 class PilotLanguageResponse(PilotLanguageBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
-
-    class Config:
-        from_attributes = True
 
 
 # ============ Flight Crew (Pilot) Schemas ============
@@ -131,12 +126,11 @@ class FlightCrewUpdate(BaseModel):
 
 
 class FlightCrewResponse(FlightCrewBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     created_at: Optional[datetime]
     flight_id: Optional[int] = None
-
-    class Config:
-        from_attributes = True
     
     @model_validator(mode='before')
     @classmethod
@@ -191,11 +185,10 @@ class FlightCrewAssignmentCreate(FlightCrewAssignmentBase):
 
 
 class FlightCrewAssignmentResponse(FlightCrewAssignmentBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     assigned_at: Optional[datetime]
-
-    class Config:
-        from_attributes = True
 
 
 # ============ Flight Information Schemas ============
@@ -245,9 +238,8 @@ class FlightInfoResponse(FlightInfoBase):
     flight_crew: Optional[List["FlightCrewResponse"]] = None
     cabin_crew: Optional[List["CabinCrewResponse"]] = None
     passengers: Optional[List["PassengerResponse"]] = None
-
-    class Config:
-        from_attributes = True
+    
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============ Shared Flight Schemas ============
@@ -269,8 +261,7 @@ class SharedFlightResponse(SharedFlightBase):
     primary_airline: Optional[AirlineResponse] = None
     secondary_airline: Optional[AirlineResponse] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ConnectingFlightBase(BaseModel):
@@ -285,11 +276,10 @@ class ConnectingFlightCreate(ConnectingFlightBase):
 
 
 class ConnectingFlightResponse(ConnectingFlightBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     created_at: Optional[datetime]
-    
-    class Config:
-        from_attributes = True
 
 
 # ============ Passenger Schemas ============
@@ -327,11 +317,10 @@ class PassengerUpdate(BaseModel):
 
 
 class PassengerResponse(PassengerBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     created_at: Optional[datetime]
-
-    class Config:
-        from_attributes = True
 
 
 
@@ -366,12 +355,11 @@ class CabinCrewUpdate(BaseModel):
 
 
 class CabinCrewResponse(CabinCrewBase):
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     flight_id: Optional[int] = None
     created_at: Optional[datetime]
-
-    class Config:
-        from_attributes = True
 
 
 # ============ Roster Schemas ============
@@ -397,8 +385,7 @@ class RosterResponse(BaseModel):
     roster_data: Dict[str, Any]
     metadata: Optional[Dict[str, Any]]
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RosterListResponse(BaseModel):
@@ -409,5 +396,4 @@ class RosterListResponse(BaseModel):
     generated_by: Optional[str]
     database_type: str
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -240,10 +240,16 @@ export function ExtendedView({ flight }: ExtendedViewProps) {
                 <h4 className="font-semibold text-green-900 mb-2">Passenger Statistics</h4>
                 <div className="text-sm text-green-800 space-y-1">
                   <div>
-                    Business Class: {passengers.filter((p: any) => p.seat_type === "Business" || p.class === "Business").length}
+                    Business Class: {passengers.filter((p: any) => {
+                      const seatType = (p.seat_type || p.class || '').toLowerCase();
+                      return seatType === 'business';
+                    }).length}
                   </div>
                   <div>
-                    Economy Class: {passengers.filter((p: any) => p.seat_type === "Economy" || p.class === "Economy").length}
+                    Economy Class: {passengers.filter((p: any) => {
+                      const seatType = (p.seat_type || p.class || '').toLowerCase();
+                      return seatType === 'economy' || !seatType;
+                    }).length}
                   </div>
                   <div>Infants (0-2 years): {passengers.filter((p: any) => p.age <= 2).length}</div>
                   <div>

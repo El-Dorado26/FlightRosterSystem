@@ -1,6 +1,7 @@
 import re
 import json
 import csv
+import os
 from io import StringIO
 from typing import List
 import time
@@ -35,6 +36,10 @@ router = APIRouter()
 FLIGHT_NO_RE = re.compile(r"^[A-Z]{2}\d{4}$")   # AANNNN
 AIRPORT_CODE_RE = re.compile(r"^[A-Z]{3}$")     # AAA
 
+# Single Company Configuration
+# Flight Information API serves a single company - all flight numbers must start with this code
+PRIMARY_AIRLINE_CODE = os.getenv("PRIMARY_AIRLINE_CODE", "TK")
+
 # Cache keys / TTL (seconds)
 FLIGHT_LIST_CACHE_KEY = "flights:all"
 FLIGHT_CACHE_KEY_TEMPLATE = "flight:{flight_id}"
@@ -50,6 +55,29 @@ def _validate_flight_number(flight_number: str) -> None:
         )
 
 
+def _validate_single_company_operation(flight_number: str) -> None:
+    """
+    Ensure flight belongs to the configured primary airline.
+
+    The Flight Information API is designed for single-company operations.
+    All flight numbers must start with the same airline code (first two letters).
+
+    Args:
+        flight_number: Flight number in AANNNN format
+
+    Raises:
+        HTTPException: If flight number prefix doesn't match PRIMARY_AIRLINE_CODE
+    """
+    prefix = flight_number[:2]
+    if prefix != PRIMARY_AIRLINE_CODE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid airline code. This API serves {PRIMARY_AIRLINE_CODE} flights only. "
+                   f"Flight number must start with '{PRIMARY_AIRLINE_CODE}' (received '{prefix}'). "
+                   f"The system is configured for single-company operations."
+        )
+
+
 def _validate_airport_code(code: str) -> None:
     if not AIRPORT_CODE_RE.match(code):
         raise HTTPException(
@@ -59,8 +87,6 @@ def _validate_airport_code(code: str) -> None:
 
 
 # Airline Endpoints
-
-
 @router.get("/airlines", response_model=List[AirlineResponse])
 async def list_airlines(db: Session = Depends(get_db)):
     """Get all airlines."""
@@ -91,8 +117,6 @@ async def create_airline(airline: AirlineCreate, db: Session = Depends(get_db)):
 
 
 # Airport Location Endpoints
-
-
 @router.get("/airports", response_model=List[AirportLocationResponse])
 async def list_airports(db: Session = Depends(get_db)):
     """Get all airport locations."""
@@ -126,8 +150,6 @@ async def create_airport(
 
 
 # Vehicle Type Endpoints
-
-
 @router.get("/vehicles", response_model=List[VehicleTypeResponse])
 async def list_vehicle_types(db: Session = Depends(get_db)):
     """
@@ -273,10 +295,12 @@ async def create_flight(flight: FlightInfoCreate, db: Session = Depends(get_db))
 
     Validates:
     - flight_number format AANNNN
+    - single company operation (flight number must start with PRIMARY_AIRLINE_CODE)
     - Referenced airline, airports and vehicle type exist
     """
     number = flight.flight_number.upper()
     _validate_flight_number(number)
+    _validate_single_company_operation(number)
 
     # Foreign key validations
     if not db.query(models.Airline).filter(models.Airline.id == flight.airline_id).first():
@@ -322,6 +346,14 @@ async def update_flight(
         raise HTTPException(status_code=404, detail="Flight not found")
 
     update_data = flight_update.model_dump(exclude_unset=True)
+
+    # Validate flight number if being updated
+    if "flight_number" in update_data:
+        number = update_data["flight_number"].upper()
+        _validate_flight_number(number)
+        _validate_single_company_operation(number)
+        update_data["flight_number"] = number
+
     for key, value in update_data.items():
         setattr(flight, key, value)
 

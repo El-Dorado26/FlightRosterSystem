@@ -1,6 +1,6 @@
 "use client";
 
-import { Flight } from "@/lib/mock-data";
+import { Flight } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, UserCheck, PlaneTakeoff, TrendingUp } from "lucide-react";
 
@@ -13,8 +13,8 @@ export function FlightStatistics({ flight }: FlightStatisticsProps) {
   const occupiedSeats = flight.passengers.filter((p) => !p.parent_id).length;
   const occupancyRate = Math.round((occupiedSeats / totalCapacity) * 100);
 
-  const businessSeats = flight.passengers.filter((p) => p.seat_type === "Business" && !p.parent_id).length;
-  const economySeats = flight.passengers.filter((p) => p.seat_type === "Economy" && !p.parent_id).length;
+  const businessSeats = flight.passengers.filter((p) => p.seat_type === "business" && !p.parent_id).length;
+  const economySeats = flight.passengers.filter((p) => p.seat_type === "economy" && !p.parent_id).length;
   const infantCount = flight.passengers.filter((p) => p.parent_id).length;
 
   const businessCapacity = flight.vehicle_type.seating_plan?.business || 16;
@@ -24,9 +24,9 @@ export function FlightStatistics({ flight }: FlightStatisticsProps) {
   const economyOccupancy = economyCapacity > 0 ? Math.round((economySeats / economyCapacity) * 100) : 0;
 
   const totalCrew = flight.flight_crew.length + flight.cabin_crew.length;
-  const seniorPilots = flight.flight_crew.filter((c) => c.seniority_level === "Senior").length;
-  const chiefAttendants = flight.cabin_crew.filter((c) => c.attendant_type === "Chief").length;
-  const chefs = flight.cabin_crew.filter((c) => c.attendant_type === "Chef").length;
+  const seniorPilots = flight.flight_crew.filter((c) => c.seniority_level === "senior").length;
+  const chiefAttendants = flight.cabin_crew.filter((c) => c.attendant_type === "chief").length;
+  const chefs = flight.cabin_crew.filter((c) => c.attendant_type === "chef").length;
 
   const stats = [
     {
@@ -123,7 +123,7 @@ export function FlightStatistics({ flight }: FlightStatisticsProps) {
         </CardContent>
       </Card>
 
-      {flight.shared_flight && (
+      {flight.shared_flight_info && (
         <Card className="border-amber-200 bg-amber-50">
           <CardHeader>
             <CardTitle className="text-sm text-amber-900">Shared Flight</CardTitle>
@@ -131,16 +131,11 @@ export function FlightStatistics({ flight }: FlightStatisticsProps) {
           <CardContent className="text-sm text-amber-800">
             <div className="space-y-1">
               <div>
-                <strong>Partner Airline:</strong> {flight.shared_flight.secondary_airline.airline_name}
+                <strong>Partner Airline:</strong> {flight.shared_flight_info.secondary_airline?.airline_name || 'N/A'}
               </div>
               <div>
-                <strong>Partner Flight #:</strong> {flight.shared_flight.secondary_flight_number}
+                <strong>Partner Flight #:</strong> {flight.shared_flight_info.secondary_flight_number}
               </div>
-              {flight.shared_flight.connecting_flight && (
-                <div>
-                  <strong>Connecting Flight:</strong> {flight.shared_flight.connecting_flight}
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>

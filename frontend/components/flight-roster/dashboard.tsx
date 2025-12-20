@@ -6,13 +6,14 @@ import { TabularView } from "@/components/flight-roster/tabular-view";
 import { PlaneView } from "@/components/flight-roster/plane-view";
 import { ExtendedView } from "@/components/flight-roster/extended-view";
 import { FlightStatistics } from "@/components/flight-roster/flight-statistics";
+import { CrewSelector } from "@/components/flight-roster/crew-selector";
 import { useAuth } from "@/contexts/AuthContext";
 import { FeatureGuard } from "@/components/auth/role-guard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { LayoutGrid, Table2, Plane, Download, Database, BarChart3, LogOut, Search, Loader2 } from "lucide-react";
+import { LayoutGrid, Table2, Plane, Download, Database, BarChart3, LogOut, Search, Loader2, Users, CheckCircle2 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -35,6 +36,9 @@ export default function FlightRosterDashboard() {
   const [databaseType, setDatabaseType] = useState<"sql" | "nosql">("sql");
   const [crewSelectionMode, setCrewSelectionMode] = useState<"auto" | "manual">("auto");
   const [seatAssignmentMode, setSeatAssignmentMode] = useState<"auto" | "manual">("auto");
+  const [manualFlightCrewIds, setManualFlightCrewIds] = useState<number[]>([]);
+  const [manualCabinCrewIds, setManualCabinCrewIds] = useState<number[]>([]);
+  const [crewSelectionDialogOpen, setCrewSelectionDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [flightCache, setFlightCache] = useState<Map<number, any>>(new Map());
@@ -289,19 +293,27 @@ export default function FlightRosterDashboard() {
 
     setIsGeneratingRoster(true);
     try {
+      const requestBody: any = {
+        flight_id: selectedFlight.id,
+        roster_name: `${selectedFlight.flight_number} - ${new Date().toLocaleDateString()}`,
+        generated_by: "Dashboard User",
+        database_type: databaseType,
+        auto_select_crew: crewSelectionMode === "auto",
+        auto_assign_seats: seatAssignmentMode === "auto"
+      };
+
+      // Add manual crew selection if manual mode
+      if (crewSelectionMode === "manual") {
+        requestBody.flight_crew_ids = manualFlightCrewIds;
+        requestBody.cabin_crew_ids = manualCabinCrewIds;
+      }
+
       const response = await fetch(`${API_URL}/roster/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          flight_id: selectedFlight.id,
-          roster_name: `${selectedFlight.flight_number} - ${new Date().toLocaleDateString()}`,
-          generated_by: "Dashboard User",
-          database_type: databaseType,
-          auto_select_crew: crewSelectionMode === "auto",
-          auto_assign_seats: seatAssignmentMode === "auto"
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
@@ -501,7 +513,15 @@ export default function FlightRosterDashboard() {
         </div>
 
         {/* Generate Roster Dialog */}
-        <Dialog open={generateRosterDialogOpen} onOpenChange={setGenerateRosterDialogOpen}>
+        <Dialog open={generateRosterDialogOpen} onOpenChange={(open) => {
+          setGenerateRosterDialogOpen(open);
+          if (!open) {
+            // Reset crew selection when dialog closes
+            setCrewSelectionMode("auto");
+            setManualFlightCrewIds([]);
+            setManualCabinCrewIds([]);
+          }
+        }}>
           <DialogContent onClose={() => setGenerateRosterDialogOpen(false)}>
             <DialogHeader>
               <DialogTitle>Generate Flight Roster</DialogTitle>
@@ -570,22 +590,53 @@ export default function FlightRosterDashboard() {
                     <LayoutGrid className="h-8 w-8 text-green-600" />
                     <div className="text-left">
                       <div className="font-semibold">Automatic</div>
-                      <div className="text-xs text-gray-600">AI selects qualified crew</div>
+                      <div className="text-xs text-gray-600">System selects qualified crew</div>
                     </div>
                   </button>
                   <button
-                    onClick={() => setCrewSelectionMode("manual")}
-                    disabled
-                    className="flex items-center gap-3 p-4 border-2 rounded-lg opacity-50 cursor-not-allowed"
+                    onClick={() => {
+                      setCrewSelectionMode("manual");
+                      setCrewSelectionDialogOpen(true);
+                    }}
+                    className={`flex items-center gap-3 p-4 border-2 rounded-lg transition-all ${
+                      crewSelectionMode === "manual"
+                        ? "border-blue-600 bg-blue-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
                   >
-                    <LayoutGrid className="h-8 w-8 text-gray-400" />
+                    <Users className="h-8 w-8 text-blue-600" />
                     <div className="text-left">
                       <div className="font-semibold">Manual</div>
-                      <div className="text-xs text-gray-600">Coming soon</div>
+                      <div className="text-xs text-gray-600">Select crew yourself</div>
                     </div>
                   </button>
                 </div>
               </div>
+
+              {crewSelectionMode === "manual" && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-start gap-2">
+                      <Users className="h-5 w-5 text-blue-600 mt-0.5" />
+                      <div>
+                        <h4 className="font-semibold text-blue-900 mb-1">Manual Crew Selection</h4>
+                        <p className="text-sm text-blue-800">
+                          {manualFlightCrewIds.length + manualCabinCrewIds.length > 0 
+                            ? `${manualFlightCrewIds.length} flight crew and ${manualCabinCrewIds.length} cabin crew selected`
+                            : 'No crew selected yet'}
+                        </p>
+                      </div>
+                    </div>
+                    <Button 
+                      onClick={() => setCrewSelectionDialogOpen(true)}
+                      size="sm"
+                      variant="outline"
+                    >
+                      {manualFlightCrewIds.length + manualCabinCrewIds.length > 0 ? 'Edit Selection' : 'Select Crew'}
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-3">
                 <label className="text-sm font-medium">Passenger Seat Assignment</label>
@@ -657,7 +708,14 @@ export default function FlightRosterDashboard() {
               <Button variant="outline" onClick={() => setGenerateRosterDialogOpen(false)} disabled={isGeneratingRoster}>
                 Cancel
               </Button>
-              <Button onClick={handleGenerateRoster} className="bg-green-600 hover:bg-green-700" disabled={isGeneratingRoster}>
+              <Button
+                onClick={handleGenerateRoster}
+                className="bg-green-600 hover:bg-green-700"
+                disabled={
+                  isGeneratingRoster ||
+                  (crewSelectionMode === "manual" && (manualFlightCrewIds.length === 0 || manualCabinCrewIds.length === 0))
+                }
+              >
                 {isGeneratingRoster ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -670,6 +728,53 @@ export default function FlightRosterDashboard() {
                   </>
                 )}
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Full-Screen Crew Selection Dialog */}
+        <Dialog open={crewSelectionDialogOpen} onOpenChange={setCrewSelectionDialogOpen}>
+          <DialogContent className="max-w-7xl h-[90vh] flex flex-col p-0" onClose={() => setCrewSelectionDialogOpen(false)}>
+            <DialogHeader className="px-6 py-4 border-b">
+              <DialogTitle className="text-2xl">Select Crew Members</DialogTitle>
+              <DialogDescription>
+                Choose flight crew and cabin crew for {selectedFlight?.flight_number}. All crew requirements must be met.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              {selectedFlight && (
+                <CrewSelector
+                  flightId={selectedFlight.id}
+                  onCrewSelected={(flightCrewIds, cabinCrewIds) => {
+                    setManualFlightCrewIds(flightCrewIds);
+                    setManualCabinCrewIds(cabinCrewIds);
+                  }}
+                  initialFlightCrewIds={manualFlightCrewIds}
+                  initialCabinCrewIds={manualCabinCrewIds}
+                />
+              )}
+            </div>
+
+            <DialogFooter className="px-6 py-4 border-t bg-gray-50">
+              <div className="flex items-center justify-between w-full">
+                <div className="text-sm text-gray-600">
+                  <strong>Selected:</strong> {manualFlightCrewIds.length} Flight Crew, {manualCabinCrewIds.length} Cabin Crew
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setCrewSelectionDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={() => setCrewSelectionDialogOpen(false)}
+                    className="bg-blue-600 hover:bg-blue-700"
+                    disabled={manualFlightCrewIds.length === 0 || manualCabinCrewIds.length === 0}
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Confirm Selection
+                  </Button>
+                </div>
+              </div>
             </DialogFooter>
           </DialogContent>
         </Dialog>

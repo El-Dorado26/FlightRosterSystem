@@ -14,8 +14,9 @@ RUN apt-get update \
         libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy pyproject.toml first for dependency installation
+# Copy pyproject.toml and setup files for dependency installation
 COPY pyproject.toml /app/
+COPY . /app/
 
 RUN pip install --upgrade pip \
     && pip install --user --no-cache-dir -e .
@@ -39,11 +40,16 @@ COPY --from=builder /root/.local /root/.local
 # Copy application code
 COPY . /app
 
-# Add the user-site packages to PATH
 ENV PATH=/root/.local/bin:$PATH
 
-# Expose the port uvicorn will listen on
 EXPOSE 8000
 
-# Default command to run the FastAPI app with hot reload enabled
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Default required environment variables (must be provided at runtime)
+ENV LOG_LEVEL=INFO
+
+# Run the application without --reload for production
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
