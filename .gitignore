@@ -13,6 +13,8 @@
 frontend/.next
 *.sql
 
+backend/*./__pycache__/*.
+
 # testing
 /coverage
 

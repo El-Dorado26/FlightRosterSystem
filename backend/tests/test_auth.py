@@ -9,8 +9,8 @@ Testing Strategy:
 """
 import pytest
 from datetime import datetime, timedelta
-from unittest.mock import patch
-from fastapi import HTTPException
+from unittest.mock import patch, Mock, MagicMock
+from fastapi import HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 from jose import jwt
 
@@ -596,3 +596,476 @@ class TestTokenExpiryBoundaries:
         # Token should be expired now
         with pytest.raises(HTTPException):
             decode_access_token(token)
+
+
+# ============================================================================
+# API ENDPOINT TESTS
+# ============================================================================
+
+@pytest.mark.unit
+class TestRegisterEndpoint:
+    """Test the /register API endpoint."""
+
+    @patch('api.routes.auth.get_db')
+    def test_register_new_user_success(self, mock_get_db):
+        """Test successful user registration."""
+        from api.routes.auth import register
+        from core.user_models import UserCreate
+
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_get_db.return_value = mock_db
+
+        # Mock query to return no existing user
+        query_mock = MagicMock()
+        mock_db.query.return_value = query_mock
+        filter_mock = MagicMock()
+        query_mock.filter.return_value = filter_mock
+        filter_mock.first.return_value = None
+
+        # Configure db.refresh to populate user fields (simulates DB defaults)
+        def mock_refresh(user):
+            user.id = 1
+            user.created_at = datetime(2024, 1, 1, 12, 0, 0)
+            if not hasattr(user, 'is_active') or user.is_active is None:
+                user.is_active = True
+        mock_db.refresh = mock_refresh
+
+        # Create user data
+        user_data = UserCreate(
+            email="newuser@example.com",
+            password="password123",
+            full_name="New User",
+            role="viewer"
+        )
+
+        # Call endpoint - using asyncio to run async function
+        import asyncio
+        result = asyncio.run(register(user_data, db=mock_db))
+
+        # Assertions
+        assert result.access_token is not None
+        assert result.user.email == "newuser@example.com"
+        assert result.user.role == "viewer"
+        assert result.user.is_active is True
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()
+
+    @patch('api.routes.auth.get_db')
+    def test_register_duplicate_email(self, mock_get_db):
+        """Test registration with duplicate email."""
+        from api.routes.auth import register
+        from core.user_models import UserCreate
+
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_get_db.return_value = mock_db
+
+        # Mock existing user
+        existing_user = Mock()
+        existing_user.email = "existing@example.com"
+
+        query_mock = MagicMock()
+        mock_db.query.return_value = query_mock
+        filter_mock = MagicMock()
+        query_mock.filter.return_value = filter_mock
+        filter_mock.first.return_value = existing_user
+
+        user_data = UserCreate(
+            email="existing@example.com",
+            password="password123",
+            full_name="Duplicate User",
+            role="viewer"
+        )
+
+        # Should raise HTTPException
+        import asyncio
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(register(user_data, db=mock_db))
+
+        assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
+        assert "already registered" in exc_info.value.detail.lower()
+
+    @patch('api.routes.auth.get_db')
+    def test_register_invalid_role(self, mock_get_db):
+        """Test registration with invalid role."""
+        from api.routes.auth import register
+        from core.user_models import UserCreate
+
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_get_db.return_value = mock_db
+
+        # Mock no existing user
+        query_mock = MagicMock()
+        mock_db.query.return_value = query_mock
+        filter_mock = MagicMock()
+        query_mock.filter.return_value = filter_mock
+        filter_mock.first.return_value = None
+
+        user_data = UserCreate(
+            email="newuser@example.com",
+            password="password123",
+            full_name="New User",
+            role="superadmin"  # Invalid role
+        )
+
+        # Should raise HTTPException
+        import asyncio
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(register(user_data, db=mock_db))
+
+        assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
+        assert "Invalid role" in exc_info.value.detail
+
+    @patch('api.routes.auth.get_db')
+    def test_register_password_too_long(self, mock_get_db):
+        """Test registration with password exceeding bcrypt 72-byte limit."""
+        from api.routes.auth import register
+        from core.user_models import UserCreate
+
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_get_db.return_value = mock_db
+
+        # Mock no existing user
+        query_mock = MagicMock()
+        mock_db.query.return_value = query_mock
+        filter_mock = MagicMock()
+        query_mock.filter.return_value = filter_mock
+        filter_mock.first.return_value = None
+
+        # Create password that's too long (> 72 bytes)
+        user_data = UserCreate(
+            email="newuser@example.com",
+            password="a" * 80,  # 80 bytes, exceeds 72 limit
+            full_name="New User",
+            role="viewer"
+        )
+
+        # Should raise HTTPException
+        import asyncio
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(register(user_data, db=mock_db))
+
+        assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
+        assert "too long" in exc_info.value.detail.lower()
+
+
+@pytest.mark.unit
+class TestLoginEndpoint:
+    """Test the /login API endpoint."""
+
+    @patch('api.routes.auth.verify_password')
+    @patch('api.routes.auth.get_db')
+    def test_login_valid_credentials(self, mock_get_db, mock_verify):
+        """Test successful login with valid credentials."""
+        from api.routes.auth import login
+        from core.user_models import UserLogin
+
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_get_db.return_value = mock_db
+
+        # Mock user
+        mock_user = Mock()
+        mock_user.id = 1
+        mock_user.email = "user@example.com"
+        mock_user.full_name = "Test User"
+        mock_user.role = "user"
+        mock_user.is_active = True
+        mock_user.hashed_password = "hashed_password"
+        mock_user.created_at = datetime(2024, 1, 1, 12, 0, 0)
+
+        query_mock = MagicMock()
+        mock_db.query.return_value = query_mock
+        filter_mock = MagicMock()
+        query_mock.filter.return_value = filter_mock
+        filter_mock.first.return_value = mock_user
+
+        # Mock password verification
+        mock_verify.return_value = True
+
+        credentials = UserLogin(
+            email="user@example.com",
+            password="correct_password"
+        )
+
+        # Call endpoint
+        import asyncio
+        result = asyncio.run(login(credentials, db=mock_db))
+
+        # Assertions
+        assert result.access_token is not None
+        assert result.user.email == "user@example.com"
+        assert result.user.role == "user"
+        mock_verify.assert_called_once()
+
+    @patch('api.routes.auth.verify_password')
+    @patch('api.routes.auth.get_db')
+    def test_login_invalid_password(self, mock_get_db, mock_verify):
+        """Test login with wrong password."""
+        from api.routes.auth import login
+        from core.user_models import UserLogin
+
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_get_db.return_value = mock_db
+
+        # Mock user
+        mock_user = Mock()
+        mock_user.hashed_password = "hashed_password"
+
+        query_mock = MagicMock()
+        mock_db.query.return_value = query_mock
+        filter_mock = MagicMock()
+        query_mock.filter.return_value = filter_mock
+        filter_mock.first.return_value = mock_user
+
+        # Mock password verification failure
+        mock_verify.return_value = False
+
+        credentials = UserLogin(
+            email="user@example.com",
+            password="wrong_password"
+        )
+
+        # Should raise HTTPException
+        import asyncio
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(login(credentials, db=mock_db))
+
+        assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+        assert "Incorrect" in exc_info.value.detail
+
+    @patch('api.routes.auth.get_db')
+    def test_login_user_not_found(self, mock_get_db):
+        """Test login with non-existent email."""
+        from api.routes.auth import login
+        from core.user_models import UserLogin
+
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_get_db.return_value = mock_db
+
+        # Mock no user found
+        query_mock = MagicMock()
+        mock_db.query.return_value = query_mock
+        filter_mock = MagicMock()
+        query_mock.filter.return_value = filter_mock
+        filter_mock.first.return_value = None
+
+        credentials = UserLogin(
+            email="nonexistent@example.com",
+            password="password123"
+        )
+
+        # Should raise HTTPException
+        import asyncio
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(login(credentials, db=mock_db))
+
+        assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+
+    @patch('api.routes.auth.verify_password')
+    @patch('api.routes.auth.get_db')
+    def test_login_inactive_user(self, mock_get_db, mock_verify):
+        """Test login with inactive user account."""
+        from api.routes.auth import login
+        from core.user_models import UserLogin
+
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_get_db.return_value = mock_db
+
+        # Mock inactive user
+        mock_user = Mock()
+        mock_user.email = "inactive@example.com"
+        mock_user.hashed_password = "hashed_password"
+        mock_user.is_active = False
+
+        query_mock = MagicMock()
+        mock_db.query.return_value = query_mock
+        filter_mock = MagicMock()
+        query_mock.filter.return_value = filter_mock
+        filter_mock.first.return_value = mock_user
+
+        # Mock password verification success
+        mock_verify.return_value = True
+
+        credentials = UserLogin(
+            email="inactive@example.com",
+            password="correct_password"
+        )
+
+        # Should raise HTTPException
+        import asyncio
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(login(credentials, db=mock_db))
+
+        assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
+        assert "inactive" in exc_info.value.detail.lower()
+
+
+@pytest.mark.unit
+class TestGetCurrentUserInfoEndpoint:
+    """Test the /me API endpoint."""
+
+    @patch('api.routes.auth.get_current_user')
+    @patch('api.routes.auth.get_db')
+    def test_get_current_user_success(self, mock_get_db, mock_get_current):
+        """Test successful retrieval of current user info."""
+        from api.routes.auth import get_current_user_info
+
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_get_db.return_value = mock_db
+
+        # Mock current user from token
+        mock_get_current.return_value = {
+            "email": "user@example.com",
+            "role": "user"
+        }
+
+        # Mock user from database
+        mock_user = Mock()
+        mock_user.id = 1
+        mock_user.email = "user@example.com"
+        mock_user.full_name = "Test User"
+        mock_user.role = "user"
+        mock_user.is_active = True
+        mock_user.created_at = datetime(2024, 1, 1, 12, 0, 0)
+
+        query_mock = MagicMock()
+        mock_db.query.return_value = query_mock
+        filter_mock = MagicMock()
+        query_mock.filter.return_value = filter_mock
+        filter_mock.first.return_value = mock_user
+
+        # Call endpoint
+        import asyncio
+        result = asyncio.run(get_current_user_info(
+            current_user={"email": "user@example.com", "role": "user"},
+            db=mock_db
+        ))
+
+        # Assertions
+        assert result.email == "user@example.com"
+        assert result.full_name == "Test User"
+        assert result.role == "user"
+
+    @patch('api.routes.auth.get_current_user')
+    @patch('api.routes.auth.get_db')
+    def test_get_current_user_not_found(self, mock_get_db, mock_get_current):
+        """Test /me endpoint when user not found in database."""
+        from api.routes.auth import get_current_user_info
+
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_get_db.return_value = mock_db
+
+        # Mock current user from token
+        mock_get_current.return_value = {
+            "email": "deleted@example.com",
+            "role": "user"
+        }
+
+        # Mock no user found in database
+        query_mock = MagicMock()
+        mock_db.query.return_value = query_mock
+        filter_mock = MagicMock()
+        query_mock.filter.return_value = filter_mock
+        filter_mock.first.return_value = None
+
+        # Should raise HTTPException
+        import asyncio
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(get_current_user_info(
+                current_user={"email": "deleted@example.com", "role": "user"},
+                db=mock_db
+            ))
+
+        assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
+        assert "not found" in exc_info.value.detail.lower()
+
+
+@pytest.mark.unit
+class TestRefreshTokenEndpoint:
+    """Test the /refresh API endpoint."""
+
+    @patch('api.routes.auth.get_current_user')
+    @patch('api.routes.auth.get_db')
+    def test_refresh_token_success(self, mock_get_db, mock_get_current):
+        """Test successful token refresh."""
+        from api.routes.auth import refresh_token
+
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_get_db.return_value = mock_db
+
+        # Mock current user from token
+        mock_get_current.return_value = {
+            "email": "user@example.com",
+            "role": "user"
+        }
+
+        # Mock user from database
+        mock_user = Mock()
+        mock_user.id = 1
+        mock_user.email = "user@example.com"
+        mock_user.full_name = "Test User"
+        mock_user.role = "user"
+        mock_user.is_active = True
+        mock_user.created_at = datetime(2024, 1, 1, 12, 0, 0)
+
+        query_mock = MagicMock()
+        mock_db.query.return_value = query_mock
+        filter_mock = MagicMock()
+        query_mock.filter.return_value = filter_mock
+        filter_mock.first.return_value = mock_user
+
+        # Call endpoint
+        import asyncio
+        result = asyncio.run(refresh_token(
+            current_user={"email": "user@example.com", "role": "user"},
+            db=mock_db
+        ))
+
+        # Assertions
+        assert result.access_token is not None
+        assert result.user.email == "user@example.com"
+        assert result.user.role == "user"
+
+    @patch('api.routes.auth.get_current_user')
+    @patch('api.routes.auth.get_db')
+    def test_refresh_token_user_not_found(self, mock_get_db, mock_get_current):
+        """Test token refresh when user no longer exists."""
+        from api.routes.auth import refresh_token
+
+        # Setup mock database
+        mock_db = MagicMock()
+        mock_get_db.return_value = mock_db
+
+        # Mock current user from token
+        mock_get_current.return_value = {
+            "email": "deleted@example.com",
+            "role": "user"
+        }
+
+        # Mock no user found in database
+        query_mock = MagicMock()
+        mock_db.query.return_value = query_mock
+        filter_mock = MagicMock()
+        query_mock.filter.return_value = filter_mock
+        filter_mock.first.return_value = None
+
+        # Should raise HTTPException
+        import asyncio
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(refresh_token(
+                current_user={"email": "deleted@example.com", "role": "user"},
+                db=mock_db
+            ))
+
+        assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
+        assert "not found" in exc_info.value.detail.lower()

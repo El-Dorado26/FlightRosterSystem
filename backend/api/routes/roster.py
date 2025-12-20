@@ -102,10 +102,7 @@ async def generate_roster(
         )
 
     # NOTE: We do NOT set flight_id on crew members
-    # Rosters are snapshots/planning documents, not permanent assignments
-    # This allows crew to be reused for multiple roster generations
 
-    # Assign cabin crew to flight
     for crew in cabin_crew_members:
         crew.flight_id = roster_create.flight_id
 
@@ -114,28 +111,23 @@ async def generate_roster(
     ).all()
     
     if roster_create.auto_assign_seats:
-        # Get existing seat assignments
         reserved_seats = [p.seat_number for p in passengers if p.seat_number]
         
-        # Log seating plan info for debugging
         logger.info(f"Seating plan type: {type(flight.vehicle_type.seating_plan)}")
         logger.info(f"Seating plan value: {flight.vehicle_type.seating_plan}")
         
-        # Assign seats to passengers without seat numbers
         seat_assignments = assign_seats_to_passengers(
             passengers,
             flight.vehicle_type.seating_plan,
             reserved_seats
         )
         
-        # Update passenger seat numbers in database
         for passenger in passengers:
             if passenger.id in seat_assignments:
                 passenger.seat_number = seat_assignments[passenger.id]
     
     db.commit()
 
-    # Invalidate flight cache so updated crew/passenger data is fetched
     try:
         delete_cache("flights:all")
         delete_cache(build_cache_key("flight:{flight_id}", flight_id=roster_create.flight_id))
@@ -149,7 +141,6 @@ async def generate_roster(
     for passenger in passengers:
         db.refresh(passenger)
     
-    # Build complete roster data
     roster_data = {
         "flight_info": {
             "id": flight.id,
@@ -246,9 +237,7 @@ async def generate_roster(
         "auto_seat_assignment": roster_create.auto_assign_seats
     }
     
-    # Save to appropriate database based on user selection
     if roster_create.database_type == "nosql":
-        # Save to MongoDB
         mongo_roster_data = {
             "flight_id": roster_create.flight_id,
             "roster_name": roster_create.roster_name,
@@ -272,7 +261,6 @@ async def generate_roster(
             "metadata": metadata
         }
     else:
-        # Save to SQL (PostgreSQL)
         new_roster = models.Roster(
             flight_id=roster_create.flight_id,
             roster_name=roster_create.roster_name,

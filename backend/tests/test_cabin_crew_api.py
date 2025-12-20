@@ -9,9 +9,10 @@ from api.routes.cabin_crew import (
     create_cabin_crew,
     update_cabin_crew,
     delete_cabin_crew,
-    get_cabin_crew_by_type,
-    get_cabin_crew_for_flight,
+    get_crew_by_type,
+    get_cabin_crew_by_flight,
 )
+import asyncio
 from core.models import CabinCrew
 from core.schemas import CabinCrewCreate, CabinCrewUpdate
 
@@ -113,7 +114,7 @@ class TestListCabinCrew:
     
     @patch('api.routes.cabin_crew.get_cache')
     @patch('api.routes.cabin_crew.set_cache')
-    async def test_list_all_cabin_crew_cache_miss(self, mock_set_cache, mock_get_cache,
+    def test_list_all_cabin_crew_cache_miss(self, mock_set_cache, mock_get_cache,
                                                    mock_db_session, mock_cabin_crew_chief,
                                                    mock_cabin_crew_regular):
         """Test listing all cabin crew with cache miss."""
@@ -122,7 +123,7 @@ class TestListCabinCrew:
         mock_db_session.query.return_value = query_mock
         query_mock.all.return_value = [mock_cabin_crew_chief, mock_cabin_crew_regular]
         
-        result = await list_cabin_crew(db=mock_db_session)
+        result = asyncio.run(list_cabin_crew(db=mock_db_session))
         
         assert len(result) == 2
         assert result[0].attendant_type == "chief"
@@ -131,7 +132,7 @@ class TestListCabinCrew:
         mock_set_cache.assert_called_once()
     
     @patch('api.routes.cabin_crew.get_cache')
-    async def test_list_cabin_crew_cache_hit(self, mock_get_cache, mock_db_session):
+    def test_list_cabin_crew_cache_hit(self, mock_get_cache, mock_db_session):
         """Test listing cabin crew with cache hit."""
         cached_data = [{
             "id": 1,
@@ -140,7 +141,7 @@ class TestListCabinCrew:
         }]
         mock_get_cache.return_value = json.dumps(cached_data)
         
-        result = await list_cabin_crew(db=mock_db_session)
+        result = asyncio.run(list_cabin_crew(db=mock_db_session))
         
         assert len(result) == 1
         mock_get_cache.assert_called_once()
@@ -153,7 +154,7 @@ class TestGetCabinCrew:
     
     @patch('api.routes.cabin_crew.get_cache')
     @patch('api.routes.cabin_crew.set_cache')
-    async def test_get_cabin_crew_by_id_cache_miss(self, mock_set_cache, mock_get_cache,
+    def test_get_cabin_crew_by_id_cache_miss(self, mock_set_cache, mock_get_cache,
                                                     mock_db_session, mock_cabin_crew_chief):
         """Test getting a cabin crew member by ID with cache miss."""
         mock_get_cache.return_value = None
@@ -162,14 +163,14 @@ class TestGetCabinCrew:
         query_mock.filter.return_value = query_mock
         query_mock.first.return_value = mock_cabin_crew_chief
         
-        result = await get_cabin_crew(crew_id=1, db=mock_db_session)
+        result = asyncio.run(get_cabin_crew(crew_id=1, db=mock_db_session))
         
         assert result.id == 1
         assert result.attendant_type == "chief"
         mock_set_cache.assert_called_once()
     
     @patch('api.routes.cabin_crew.get_cache')
-    async def test_get_cabin_crew_cache_hit(self, mock_get_cache, mock_db_session):
+    def test_get_cabin_crew_cache_hit(self, mock_get_cache, mock_db_session):
         """Test getting cabin crew with cache hit."""
         cached_data = {
             "id": 1,
@@ -178,13 +179,13 @@ class TestGetCabinCrew:
         }
         mock_get_cache.return_value = json.dumps(cached_data)
         
-        result = await get_cabin_crew(crew_id=1, db=mock_db_session)
+        result = asyncio.run(get_cabin_crew(crew_id=1, db=mock_db_session))
         
         mock_get_cache.assert_called_once()
         mock_db_session.query.assert_not_called()
     
     @patch('api.routes.cabin_crew.get_cache')
-    async def test_get_cabin_crew_not_found(self, mock_get_cache, mock_db_session):
+    def test_get_cabin_crew_not_found(self, mock_get_cache, mock_db_session):
         """Test getting a non-existent cabin crew member."""
         mock_get_cache.return_value = None
         query_mock = MagicMock()
@@ -193,7 +194,7 @@ class TestGetCabinCrew:
         query_mock.first.return_value = None
         
         with pytest.raises(HTTPException) as exc_info:
-            await get_cabin_crew(crew_id=999, db=mock_db_session)
+            asyncio.run(get_cabin_crew(crew_id=999, db=mock_db_session))
         
         assert exc_info.value.status_code == 404
 
@@ -203,7 +204,7 @@ class TestCreateCabinCrew:
     """Test the create_cabin_crew endpoint."""
     
     @patch('api.routes.cabin_crew.delete_cache')
-    async def test_create_cabin_crew_chief_success(self, mock_delete_cache,
+    def test_create_cabin_crew_chief_success(self, mock_delete_cache,
                                                     mock_db_session,
                                                     cabin_crew_create_chief):
         """Test successful creation of chief cabin crew."""
@@ -216,15 +217,14 @@ class TestCreateCabinCrew:
         mock_db_session.commit = Mock()
         mock_db_session.refresh = Mock()
         
-        result = await create_cabin_crew(crew=cabin_crew_create_chief,
-                                         db=mock_db_session)
+        result = asyncio.run(create_cabin_crew(crew=cabin_crew_create_chief, db=mock_db_session))
         
         mock_db_session.add.assert_called_once()
         mock_db_session.commit.assert_called_once()
         mock_delete_cache.assert_called()
     
     @patch('api.routes.cabin_crew.delete_cache')
-    async def test_create_cabin_crew_chef_with_recipes(self, mock_delete_cache,
+    def test_create_cabin_crew_chef_with_recipes(self, mock_delete_cache,
                                                         mock_db_session,
                                                         cabin_crew_create_chef):
         """Test successful creation of chef with recipes."""
@@ -237,13 +237,12 @@ class TestCreateCabinCrew:
         mock_db_session.commit = Mock()
         mock_db_session.refresh = Mock()
         
-        result = await create_cabin_crew(crew=cabin_crew_create_chef,
-                                         db=mock_db_session)
+        result = asyncio.run(create_cabin_crew(crew=cabin_crew_create_chef),db=mock_db_session)
         
         mock_db_session.add.assert_called_once()
         mock_db_session.commit.assert_called_once()
     
-    async def test_create_cabin_crew_chef_invalid_recipe_count(self, mock_db_session):
+    def test_create_cabin_crew_chef_invalid_recipe_count(self, mock_db_session):
         """Test creating chef with invalid number of recipes."""
         # Too few recipes
         invalid_data = CabinCrewCreate(
@@ -259,12 +258,12 @@ class TestCreateCabinCrew:
         )
         
         with pytest.raises(HTTPException) as exc_info:
-            await create_cabin_crew(crew=invalid_data, db=mock_db_session)
+            asyncio.run(create_cabin_crew(crew=invalid_data, db=mock_db_session))
         
         assert exc_info.value.status_code == 400
         assert "2-4" in str(exc_info.value.detail)
     
-    async def test_create_cabin_crew_invalid_type(self, mock_db_session):
+    def test_create_cabin_crew_invalid_type(self, mock_db_session):
         """Test creating cabin crew with invalid attendant type."""
         invalid_data = CabinCrewCreate(
             name="Invalid Crew",
@@ -278,12 +277,12 @@ class TestCreateCabinCrew:
         )
         
         with pytest.raises(HTTPException) as exc_info:
-            await create_cabin_crew(crew=invalid_data, db=mock_db_session)
+            asyncio.run(create_cabin_crew(crew=invalid_data, db=mock_db_session))
         
         assert exc_info.value.status_code == 400
         assert "attendant_type" in str(exc_info.value.detail).lower()
     
-    async def test_create_cabin_crew_duplicate_employee_id(self, mock_db_session,
+    def test_create_cabin_crew_duplicate_employee_id(self, mock_db_session,
                                                            cabin_crew_create_chief,
                                                            mock_cabin_crew_chief):
         """Test creating cabin crew with duplicate employee ID."""
@@ -293,14 +292,13 @@ class TestCreateCabinCrew:
         query_mock.first.return_value = mock_cabin_crew_chief  # Duplicate
         
         with pytest.raises(HTTPException) as exc_info:
-            await create_cabin_crew(crew=cabin_crew_create_chief,
-                                   db=mock_db_session)
+            asyncio.run(create_cabin_crew(crew=cabin_crew_create_chief),db=mock_db_session)
         
         assert exc_info.value.status_code == 400
         assert "already exists" in str(exc_info.value.detail).lower()
     
     @patch('api.routes.cabin_crew.delete_cache')
-    async def test_create_cabin_crew_regular(self, mock_delete_cache, mock_db_session):
+    def test_create_cabin_crew_regular(self, mock_delete_cache, mock_db_session):
         """Test creating regular cabin crew."""
         crew_data = CabinCrewCreate(
             name="Regular Attendant",
@@ -322,7 +320,7 @@ class TestCreateCabinCrew:
         mock_db_session.commit = Mock()
         mock_db_session.refresh = Mock()
         
-        result = await create_cabin_crew(crew=crew_data, db=mock_db_session)
+        result = asyncio.run(create_cabin_crew(crew=crew_data, db=mock_db_session))
         
         mock_db_session.add.assert_called_once()
 
@@ -332,7 +330,7 @@ class TestUpdateCabinCrew:
     """Test the update_cabin_crew endpoint."""
     
     @patch('api.routes.cabin_crew.delete_cache')
-    async def test_update_cabin_crew_success(self, mock_delete_cache, mock_db_session,
+    def test_update_cabin_crew_success(self, mock_delete_cache, mock_db_session,
                                              mock_cabin_crew_regular):
         """Test successful cabin crew update."""
         query_mock = MagicMock()
@@ -345,15 +343,14 @@ class TestUpdateCabinCrew:
             languages=["English", "Spanish", "Portuguese"]
         )
         
-        result = await update_cabin_crew(crew_id=2, crew=update_data,
-                                         db=mock_db_session)
+        result = asyncio.run(update_cabin_crew(crew_id=2, crew=update_data),db=mock_db_session)
         
         assert mock_cabin_crew_regular.seniority_level == "Senior"
         mock_db_session.commit.assert_called_once()
         mock_delete_cache.assert_called()
     
     @patch('api.routes.cabin_crew.delete_cache')
-    async def test_update_cabin_crew_not_found(self, mock_delete_cache, mock_db_session):
+    def test_update_cabin_crew_not_found(self, mock_delete_cache, mock_db_session):
         """Test updating a non-existent cabin crew member."""
         query_mock = MagicMock()
         mock_db_session.query.return_value = query_mock
@@ -363,13 +360,12 @@ class TestUpdateCabinCrew:
         update_data = CabinCrewUpdate(seniority_level="Senior")
         
         with pytest.raises(HTTPException) as exc_info:
-            await update_cabin_crew(crew_id=999, crew=update_data,
-                                   db=mock_db_session)
+            asyncio.run(update_cabin_crew(crew_id=999, crew=update_data),db=mock_db_session)
         
         assert exc_info.value.status_code == 404
     
     @patch('api.routes.cabin_crew.delete_cache')
-    async def test_update_chef_recipes(self, mock_delete_cache, mock_db_session,
+    def test_update_chef_recipes(self, mock_delete_cache, mock_db_session,
                                       mock_cabin_crew_chef):
         """Test updating chef's recipes."""
         query_mock = MagicMock()
@@ -381,8 +377,7 @@ class TestUpdateCabinCrew:
             recipes=["New Dish 1", "New Dish 2", "New Dish 3", "New Dish 4"]
         )
         
-        result = await update_cabin_crew(crew_id=3, crew=update_data,
-                                         db=mock_db_session)
+        result = asyncio.run(update_cabin_crew(crew_id=3, crew=update_data, db=mock_db_session))
         
         assert mock_cabin_crew_chef.recipes == update_data.recipes
         mock_db_session.commit.assert_called_once()
@@ -393,7 +388,7 @@ class TestDeleteCabinCrew:
     """Test the delete_cabin_crew endpoint."""
     
     @patch('api.routes.cabin_crew.delete_cache')
-    async def test_delete_cabin_crew_success(self, mock_delete_cache, mock_db_session,
+    def test_delete_cabin_crew_success(self, mock_delete_cache, mock_db_session,
                                              mock_cabin_crew_regular):
         """Test successful cabin crew deletion."""
         query_mock = MagicMock()
@@ -401,13 +396,13 @@ class TestDeleteCabinCrew:
         query_mock.filter.return_value = query_mock
         query_mock.first.return_value = mock_cabin_crew_regular
         
-        await delete_cabin_crew(crew_id=2, db=mock_db_session)
+        asyncio.run(delete_cabin_crew(crew_id=2, db=mock_db_session))
         
         mock_db_session.delete.assert_called_once_with(mock_cabin_crew_regular)
         mock_db_session.commit.assert_called_once()
         mock_delete_cache.assert_called()
     
-    async def test_delete_cabin_crew_not_found(self, mock_db_session):
+    def test_delete_cabin_crew_not_found(self, mock_db_session):
         """Test deleting a non-existent cabin crew member."""
         query_mock = MagicMock()
         mock_db_session.query.return_value = query_mock
@@ -415,7 +410,7 @@ class TestDeleteCabinCrew:
         query_mock.first.return_value = None
         
         with pytest.raises(HTTPException) as exc_info:
-            await delete_cabin_crew(crew_id=999, db=mock_db_session)
+            asyncio.run(delete_cabin_crew(crew_id=999, db=mock_db_session))
         
         assert exc_info.value.status_code == 404
 
@@ -426,7 +421,7 @@ class TestGetCabinCrewByType:
     
     @patch('api.routes.cabin_crew.get_cache')
     @patch('api.routes.cabin_crew.set_cache')
-    async def test_get_cabin_crew_by_type_chief(self, mock_set_cache, mock_get_cache,
+    def test_get_cabin_crew_by_type_chief(self, mock_set_cache, mock_get_cache,
                                                  mock_db_session, mock_cabin_crew_chief):
         """Test getting cabin crew by type 'chief'."""
         mock_get_cache.return_value = None
@@ -435,8 +430,7 @@ class TestGetCabinCrewByType:
         query_mock.filter.return_value = query_mock
         query_mock.all.return_value = [mock_cabin_crew_chief]
         
-        result = await get_cabin_crew_by_type(attendant_type="chief",
-                                              db=mock_db_session)
+        result = asyncio.run(get_crew_by_type(attendant_type="chief",db=mock_db_session))
         
         assert len(result) == 1
         assert result[0].attendant_type == "chief"
@@ -444,7 +438,7 @@ class TestGetCabinCrewByType:
     
     @patch('api.routes.cabin_crew.get_cache')
     @patch('api.routes.cabin_crew.set_cache')
-    async def test_get_cabin_crew_by_type_chef(self, mock_set_cache, mock_get_cache,
+    def test_get_cabin_crew_by_type_chef(self, mock_set_cache, mock_get_cache,
                                                 mock_db_session, mock_cabin_crew_chef):
         """Test getting cabin crew by type 'chef'."""
         mock_get_cache.return_value = None
@@ -453,8 +447,7 @@ class TestGetCabinCrewByType:
         query_mock.filter.return_value = query_mock
         query_mock.all.return_value = [mock_cabin_crew_chef]
         
-        result = await get_cabin_crew_by_type(attendant_type="chef",
-                                              db=mock_db_session)
+        result = asyncio.run(get_crew_by_type(attendant_type="chef",db=mock_db_session))
         
         assert len(result) == 1
         assert result[0].attendant_type == "chef"
@@ -467,7 +460,7 @@ class TestGetCabinCrewForFlight:
     
     @patch('api.routes.cabin_crew.get_cache')
     @patch('api.routes.cabin_crew.set_cache')
-    async def test_get_cabin_crew_for_flight(self, mock_set_cache, mock_get_cache,
+    def test_get_cabin_crew_by_flight(self, mock_set_cache, mock_get_cache,
                                              mock_db_session, mock_cabin_crew_chief,
                                              mock_cabin_crew_regular):
         """Test getting cabin crew assigned to a specific flight."""
@@ -477,13 +470,13 @@ class TestGetCabinCrewForFlight:
         query_mock.filter.return_value = query_mock
         query_mock.all.return_value = [mock_cabin_crew_chief, mock_cabin_crew_regular]
         
-        result = await get_cabin_crew_for_flight(flight_id=1, db=mock_db_session)
+        result = asyncio.run(get_cabin_crew_by_flight(flight_id=1, db=mock_db_session))
         
         assert len(result) == 2
         mock_set_cache.assert_called_once()
     
     @patch('api.routes.cabin_crew.get_cache')
-    async def test_get_cabin_crew_for_flight_cache_hit(self, mock_get_cache,
+    def test_get_cabin_crew_for_flight_cache_hit(self, mock_get_cache,
                                                         mock_db_session):
         """Test getting cabin crew for flight with cache hit."""
         cached_data = [{
@@ -493,7 +486,7 @@ class TestGetCabinCrewForFlight:
         }]
         mock_get_cache.return_value = json.dumps(cached_data)
         
-        result = await get_cabin_crew_for_flight(flight_id=1, db=mock_db_session)
+        result = asyncio.run(get_cabin_crew_by_flight(flight_id=1, db=mock_db_session))
         
         assert len(result) == 1
         mock_db_session.query.assert_not_called()
@@ -503,7 +496,7 @@ class TestGetCabinCrewForFlight:
 class TestCabinCrewValidation:
     """Test cabin crew validation rules."""
     
-    async def test_attendant_type_validation(self):
+    def test_attendant_type_validation(self):
         """Test that attendant_type must be valid."""
         valid_types = ["chief", "regular", "chef"]
         
@@ -535,7 +528,7 @@ class TestCabinCrewValidation:
             # Should create valid CabinCrewCreate object
             assert crew_data.attendant_type == type_value
     
-    async def test_chef_recipes_validation(self, mock_db_session):
+    def test_chef_recipes_validation(self, mock_db_session):
         """Test that chef must have 2-4 recipes."""
         # Test with 0 recipes
         invalid_data = CabinCrewCreate(
@@ -551,11 +544,11 @@ class TestCabinCrewValidation:
         )
         
         with pytest.raises(HTTPException) as exc_info:
-            await create_cabin_crew(crew=invalid_data, db=mock_db_session)
+            asyncio.run(create_cabin_crew(crew=invalid_data, db=mock_db_session))
         
         assert exc_info.value.status_code == 400
     
-    async def test_chef_recipes_too_many(self, mock_db_session):
+    def test_chef_recipes_too_many(self, mock_db_session):
         """Test that chef cannot have more than 4 recipes."""
         invalid_data = CabinCrewCreate(
             name="Chef Too Many",
@@ -570,7 +563,7 @@ class TestCabinCrewValidation:
         )
         
         with pytest.raises(HTTPException) as exc_info:
-            await create_cabin_crew(crew=invalid_data, db=mock_db_session)
+            asyncio.run(create_cabin_crew(crew=invalid_data, db=mock_db_session))
         
         assert exc_info.value.status_code == 400
 
@@ -579,13 +572,13 @@ class TestCabinCrewValidation:
 class TestCabinCrewExport:
     """Test cabin crew export functionality."""
     
-    async def test_export_cabin_crew_to_csv(self, mock_db_session, mock_cabin_crew_chief,
+    def test_export_cabin_crew_to_csv(self, mock_db_session, mock_cabin_crew_chief,
                                             mock_cabin_crew_regular):
         """Test exporting cabin crew data to CSV."""
         # This tests the CSV export endpoint if it exists
         pass
     
-    async def test_export_cabin_crew_to_json(self):
+    def test_export_cabin_crew_to_json(self):
         """Test exporting cabin crew data to JSON."""
         pass
 
