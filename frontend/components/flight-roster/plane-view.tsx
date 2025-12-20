@@ -54,6 +54,27 @@ export function PlaneView({ flight }: PlaneViewProps) {
   console.log('SeatMap contents:', Array.from(seatMap.entries()));
   console.log('SeatMap size:', seatMap.size);
 
+  // Create crew display list with all crew members
+  const crewDisplay: Array<{ seatLabel: string; person: any }> = [];
+  
+  // Add flight crew with seat assignments or auto-generated labels
+  flightCrew.forEach((crew: any, index: number) => {
+    const seatLabel = crew.seat_number || `FC${index + 1}`;
+    crewDisplay.push({
+      seatLabel,
+      person: { ...crew, type: "Flight Crew" }
+    });
+  });
+  
+  // Add cabin crew with seat assignments or auto-generated labels
+  cabinCrew.forEach((crew: any, index: number) => {
+    const seatLabel = crew.seat_number || `CC${index + 1}`;
+    crewDisplay.push({
+      seatLabel,
+      person: { ...crew, type: "Cabin Crew" }
+    });
+  });
+
   // Handle different seating plan structures
   let businessRows = 0;
   let economyRows = 0;
@@ -196,32 +217,30 @@ export function PlaneView({ flight }: PlaneViewProps) {
           <div className="mb-4 border-b pb-4">
             <div className="text-xs font-semibold text-gray-600 mb-2">CREW AREA</div>
             <div className="flex gap-2 flex-wrap">
-              {Array.from(seatMap.entries())
-                .filter(([_, person]) => person.type === "Flight Crew" || person.type === "Cabin Crew")
-                .map(([seatLabel, person]) => (
-                  <div
-                    key={seatLabel}
-                    className={`relative w-20 h-10 border-2 rounded cursor-pointer transition-all ${getSeatColor(seatLabel)} flex items-center justify-center`}
-                    onMouseEnter={() => setHoveredSeat(seatLabel)}
-                    onMouseLeave={() => setHoveredSeat(null)}
-                  >
-                    <span className="text-xs font-semibold">{seatLabel}</span>
-                    {hoveredSeat === seatLabel && (
-                      <div className="absolute z-50 left-0 top-full mt-2 bg-white border-2 border-gray-300 rounded-lg shadow-lg p-3 w-64 pointer-events-none">
-                        <div className="text-sm">
-                          <div className="font-semibold text-gray-900">{person.name}</div>
-                          <div className="text-gray-600 mt-1">
-                            <div>Type: {person.type}</div>
-                            <div>Age: {person.age}</div>
-                            <div>Nationality: {person.nationality}</div>
-                            {person.role && <div>Role: {person.role}</div>}
-                            {person.attendant_type && <div>Type: {person.attendant_type}</div>}
-                          </div>
+              {crewDisplay.map(({ seatLabel, person }) => (
+                <div
+                  key={seatLabel}
+                  className={`relative w-20 h-10 border-2 rounded cursor-pointer transition-all ${getSeatColor(seatLabel)} flex items-center justify-center`}
+                  onMouseEnter={() => setHoveredSeat(seatLabel)}
+                  onMouseLeave={() => setHoveredSeat(null)}
+                >
+                  <span className="text-xs font-semibold">{seatLabel}</span>
+                  {hoveredSeat === seatLabel && (
+                    <div className="absolute z-50 left-0 top-full mt-2 bg-white border-2 border-gray-300 rounded-lg shadow-lg p-3 w-64 pointer-events-none">
+                      <div className="text-sm">
+                        <div className="font-semibold text-gray-900">{person.name}</div>
+                        <div className="text-gray-600 mt-1">
+                          <div>Type: {person.type}</div>
+                          <div>Age: {person.age}</div>
+                          <div>Nationality: {person.nationality}</div>
+                          {person.role && <div>Role: {person.role}</div>}
+                          {person.attendant_type && <div>Type: {person.attendant_type}</div>}
                         </div>
                       </div>
-                    )}
-                  </div>
-                ))}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 

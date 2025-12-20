@@ -470,7 +470,7 @@ export default function FlightRosterDashboard() {
                 Flight Roster Management
               </h1>
               <p className="text-sm text-gray-500 mt-1 font-medium">
-                Personnel & Passenger Operations System
+                Crew-Roster Operations System
               </p>
             </div>
           </div>
